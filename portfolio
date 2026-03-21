@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+
+COMPOSE="docker compose -f docker-dev/docker-compose.yml"
+NODE20="/home/emdad/.nvm/versions/node/v20.19.4/bin/node"
+
+case "$1" in
+  up)
+    $COMPOSE up --build -d
+    echo "Syncing dependencies..."
+    $COMPOSE exec app npm install
+    echo "Running DB migrations..."
+    $COMPOSE exec app node node_modules/.bin/prisma migrate deploy
+    echo ""
+    echo "  Portfolio running at http://localhost:3000"
+    ;;
+
+  down)    $COMPOSE down ;;
+  logs)    $COMPOSE logs -f ;;
+  restart) $COMPOSE restart ;;
+  bash)    $COMPOSE exec app sh ;;
+  install) $COMPOSE exec app npm install ;;
+
+  seed)    $COMPOSE exec app node node_modules/.bin/tsx prisma/seed.ts ;;
+  fresh)   $COMPOSE exec app node node_modules/.bin/prisma migrate reset --force && \
+           $COMPOSE exec app node node_modules/.bin/tsx prisma/seed.ts ;;
+  studio)  $COMPOSE exec app node node_modules/.bin/prisma studio --hostname 0.0.0.0 ;;
+  migrate) $COMPOSE exec app node node_modules/.bin/prisma migrate dev --name "${2:-update}" ;;
+
+  build)   $COMPOSE exec app node node_modules/.bin/next build ;;
+
+  dev)     $NODE20 node_modules/.bin/next dev ;;
+
+  *)       $COMPOSE exec app "$@" ;;
+esac

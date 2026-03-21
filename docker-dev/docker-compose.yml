@@ -1,0 +1,39 @@
+services:
+  app:
+    image: portfolio-dev
+    ports:
+      - 3000:3000
+    build:
+      context: ..
+      dockerfile: ./docker-dev/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ..:/app
+      - portfolio_node_modules:/app/node_modules
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://portfolio:portfolio@postgres:5432/portfolio_dev
+      - NEXT_TELEMETRY_DISABLED=1
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: portfolio
+      POSTGRES_PASSWORD: portfolio
+      POSTGRES_DB: portfolio_dev
+    volumes:
+      - portfolio_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U portfolio -d portfolio_dev"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  portfolio_node_modules:
+  portfolio_pgdata:

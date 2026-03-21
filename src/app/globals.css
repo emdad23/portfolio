@@ -3,25 +3,47 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-inter: 'Inter', sans-serif;
+  --font-jetbrains: 'JetBrains Mono', monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+html { scroll-behavior: smooth; }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter);
+  background: #FFFFFF;
+  color: #0A0A0A;
+  overflow-x: hidden;
+  cursor: none;
+}
+
+@media (max-width: 959px) {
+  body { cursor: auto; }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
+  .animate-\[ticker_28s_linear_infinite\] {
+    animation: ticker 28s linear infinite;
   }
+  .animate-\[marquee_26s_linear_infinite\] {
+    animation: marquee 26s linear infinite;
+  }
+  .animate-\[marquee-reverse_20s_linear_infinite\] {
+    animation: marquee-reverse 20s linear infinite;
+  }
+}
+
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes marquee-reverse {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
 }
