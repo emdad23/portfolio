@@ -1,6 +1,17 @@
 import { Resend } from "resend";
 
-export const resend = new Resend(process.env.RESEND_API_KEY);
+let client: Resend | null = null;
+
+/**
+ * Lazy — the Resend constructor throws when no API key is present, so building
+ * it at module scope would break every import of this file (the email template
+ * included) on an installation that only uses SMTP. Call this from the Resend
+ * driver in `@/lib/mailer` only, after the key has been checked.
+ */
+export function getResend(): Resend {
+  if (!client) client = new Resend(process.env.RESEND_API_KEY);
+  return client;
+}
 
 export function buildContactEmailHtml({
   name,

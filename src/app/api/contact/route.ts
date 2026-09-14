@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { resend, buildContactEmailHtml } from "@/lib/resend";
+import { sendContactEmail } from "@/lib/mailer";
 import { contactSchema } from "@/lib/validations";
 
 export async function POST(req: NextRequest) {
@@ -19,15 +19,12 @@ export async function POST(req: NextRequest) {
       data: { name, email, subject, message, type },
     });
 
-    // Send email via Resend
-    if (process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== "re_your_api_key_here") {
-      await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL ?? "portfolio@emdad.dev",
-        to: process.env.RESEND_TO_EMAIL ?? "emdad.ullah@reddotdigitalit.com",
-        replyTo: email,
-        subject: `[Portfolio] ${subject}`,
-        html: buildContactEmailHtml({ name, email, subject, message, type }),
-      });
+    // Notify. The submission is already stored, so a mail failure is logged but
+    // never surfaced as an error — the caller would otherwise see a 500 for a
+    // message that was in fact saved.
+    const mail = await sendContactEmail({ name, email, subject, message, type });
+    if (!mail.sent) {
+      console.warn(`Contact email not sent (driver: ${mail.driver}): ${mail.reason}`);
     }
 
     return NextResponse.json({ success: true });
