@@ -10,5 +10,5 @@ export function findAdminByEmail(email: string) {
 }
 
 export function findAdminById(id: string) {
-  return prisma.adminUser.findUnique({ where: { id }, select: { id: true, email: true } });
+  return prisma.adminUser.findUnique({ where: { id }, select: { id: true, email: true, updatedAt: true } });
 }

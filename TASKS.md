@@ -229,44 +229,51 @@ One file for every table's schema, migration and seed didn't scale, so each conc
 
 ## 8. Admin auth & hidden URL
 
-**Status:** not started · **Depends on:** 7
+**Status:** done (2026-09-15) · **Depends on:** 7
 
 **8.1 Session helpers**
-- [ ] `src/lib/auth/session.ts` (Edge-safe, no Prisma import): `signSession(adminId)` and `verifySession(token)` using jose HS256 with a 7-day expiry.
-  - Cookie `admin_session`: httpOnly, `sameSite: lax`, `secure` in production, `path: /`.
-- [ ] `src/lib/auth/admin.ts` (server only):
-  - `adminHref(path)`.
-  - `requireAdmin()`: verifies the cookie and checks the admin still exists, redirecting to login otherwise. **Every server action calls it**, so security never rests on middleware alone.
+- [x] [src/lib/auth/session.ts](src/lib/auth/session.ts) (Edge-safe, no Prisma import): `signSession(adminId)` and `verifySession(token)` using jose HS256 with a 7-day expiry. `verifySession` pins `algorithms: ["HS256"]` and requires `sub`/`iat`/`exp`.
+  - Cookie `admin_session`: httpOnly, `sameSite: lax`, `secure` in production, `path: /`, `maxAge` 7 days (`sessionCookieOptions`).
+- [x] [src/lib/auth/config.ts](src/lib/auth/config.ts) (Edge-safe, **new, not in the plan**): `getAdminPath()` and `adminHref(path)`. They live here rather than in `admin.ts` because middleware needs them and can't import Prisma. The admin counts as enabled only when `ADMIN_PATH` is a single `[A-Za-z0-9_-]` segment, isn't reserved (`admin`, `api`, `blog`, `_next`), **and** `AUTH_SECRET` is ≥32 chars. Otherwise it logs `[admin] disabled: …` once.
+- [x] [src/lib/auth/admin.ts](src/lib/auth/admin.ts) (`server-only`): `getAdmin()` and `requireAdmin()`, re-exporting `adminHref`.
+  - `requireAdmin()` 404s when the admin is disabled and redirects to login when there's no session. **Every server action calls it, and so does every admin page that loads data**, because layouts and pages render in parallel.
+  - **Beyond the plan:** a session issued before the admin row's `updatedAt` is rejected, so a password reset through `admin:create` logs out every session. `findAdminById` now also selects `updatedAt`.
 
 **8.2 Login / logout**
-- [ ] `loginSchema` in [validations.ts](src/lib/validations.ts).
-- [ ] `actions/auth.ts`, the login action:
-  - In-memory rate limit of 5 failures per IP per 15 min.
-  - A dummy bcrypt compare when the email is unknown, so timing gives nothing away.
-  - One generic error message.
+- [x] `loginSchema` in [validations.ts](src/lib/validations.ts).
+- [x] [src/app/admin/actions/auth.ts](src/app/admin/actions/auth.ts), the login action:
+  - In-memory limit of 5 **attempts** per IP per 15 min, cleared by a successful login. Attempts are counted before the bcrypt compare rather than after a failure, so parallel requests can't all slip under the limit. The IP comes from `X-Forwarded-For`, so the host has to overwrite that header (Vercel does).
+  - A dummy bcrypt compare (cost 12, same as `admin:create`) when the email is unknown.
+  - One generic error, `Invalid email or password.` The throttle has its own message with the minutes left.
   - On success, set the cookie and redirect to the dashboard.
-- [ ] `logoutAction` clears the cookie and redirects to login.
-- [ ] `src/app/admin/login/page.tsx` + a `LoginForm` client component using `useFormState`. It follows the house style: inputs `text-base` below `md2`, 44px targets, `cursor-none`, focus rings.
+- [x] `logoutAction` clears the cookie and redirects to login.
+- [x] [login/page.tsx](src/app/admin/login/page.tsx) + [LoginForm.tsx](src/app/admin/login/LoginForm.tsx) (`useFormState` / `useFormStatus`): inputs `text-base` below `md2`, `min-h-11` targets, `cursor-none`, focus styles, `role="alert"` error wired through `aria-describedby`, and a `rem` card width so it survives a 200% root font.
+- [x] **Moved from middleware to the login page:** "login with a valid session redirects to the dashboard". Middleware can't see the DB, so a validly signed cookie for a deleted admin would have looped between login and the dashboard. The page uses `getAdmin()` instead.
+- [x] Minimal `(panel)/layout.tsx` (`requireAdmin()`, admin email, Log out) and a placeholder `(panel)/page.tsx` dashboard, needed to verify login and logout. Task 9 builds the real shell and dashboard on these.
 
 **8.3 Middleware**
-- [ ] `src/middleware.ts`, with a matcher that excludes `_next`, static files and `api`:
-  - `/admin*` renders the normal 404.
-  - `/${ADMIN_PATH}*` with no valid session redirects to `/${ADMIN_PATH}/login`.
-  - `/${ADMIN_PATH}/login` with a valid session redirects to the dashboard.
+- [x] [src/middleware.ts](src/middleware.ts), matcher `/((?!_next/|api/|favicon.ico).*)`:
+  - `/admin*` is rewritten to an unrouted path, so it renders the normal 404 with a 404 status. The path is URI-decoded first, so `/%61dmin` is caught too.
+  - `/${ADMIN_PATH}*` with no valid session redirects to `/${ADMIN_PATH}/login`. **Exception:** server-action POSTs (`Next-Action` header) pass through, because a 307 would replay the action's POST against the login page; `requireAdmin()` inside the action handles them.
   - Otherwise, rewrite to `/admin*` and set `X-Robots-Tag: noindex, nofollow`.
-- [ ] Admin layouts export `robots: { index: false, follow: false }`. The path never appears in the nav, sitemap or robots.txt.
+- [x] [admin/layout.tsx](src/app/admin/layout.tsx) exports `robots: { index: false, follow: false }` and `notFound()`s when the admin is disabled, a backstop if middleware is ever bypassed. Nothing public links to the path.
 
 **8.4 Docs**
-- [ ] [CLAUDE.md](CLAUDE.md) § Environment / Architecture: `AUTH_SECRET`, `ADMIN_PATH` (it must be set at build time too), the middleware rewrite, and the rule that every admin server action calls `requireAdmin()`. This was moved here from 11.4.
+- [x] [CLAUDE.md](CLAUDE.md) § Environment (admin env, build-time `ADMIN_PATH`, the dev-server env caveat) and § Architecture (rewrite, `requireAdmin()` everywhere, `adminHref`, Edge-safe vs `server-only` modules, throttle caveat).
 
-**8.5 Verify**
-- [ ] `/admin` and `/admin/login` return 404.
-- [ ] A logged-out `/<ADMIN_PATH>/anything` redirects to login.
-- [ ] A wrong password shows the generic error, and the 6th attempt is throttled.
-- [ ] A good login lands on the dashboard, and logout works.
-- [ ] A tampered or expired cookie redirects to login.
-- [ ] The response carries the `X-Robots-Tag` header.
-- [ ] With `ADMIN_PATH` unset, everything returns 404.
+**8.5 Verify**: host-side `npm run dev` + headless Chrome over DevTools, with a throwaway `task8-test@example.com` admin that was deleted afterwards (**no admin exists yet**). Type-checked with `tsc --noEmit`, since dev was running.
+- [x] `/admin`, `/admin/login` and `/%61dmin/login` return 404, and so does a wrong-case `/Studio-…/login`.
+- [x] A logged-out `/<ADMIN_PATH>` and `/<ADMIN_PATH>/anything` 307 to login.
+- [x] Throttle and generic error (one X-Forwarded-For): attempt 1 (unknown email) and attempts 2–5 (wrong password) all show `Invalid email or password.` at ~420ms each, so the unknown email costs a full bcrypt round too. Attempt 6, **with the correct password**, is throttled. A different IP can still log in.
+- [x] A good login lands on the dashboard. The cookie is httpOnly, Lax, `/`, not secure (dev) and expires in 7.00 days. `/login` with a session redirects to the dashboard, and logout clears the cookie and returns to login.
+- [x] Tampered, expired, wrong-key and deleted-admin cookies all land on the login form, with no redirect loop.
+- [x] A password reset through `admin:create` turns a previously valid cookie from 200 into a 307 to login.
+- [x] A cookie-less server-action POST passes middleware (the response carries `X-Robots-Tag`), and `requireAdmin()` then 307s it to login.
+- [x] `X-Robots-Tag: noindex, nofollow` is on the rewritten responses, and `<meta name="robots" content="noindex, nofollow">` is in the page.
+- [x] With `ADMIN_PATH` unset, everything returns 404. In the running dev server, middleware kept the removed var until restart, but the `AdminLayout` backstop still 404'd the login page. Middleware itself was then called directly under each config: unset, reserved `admin`/`blog`, short secret and a nested segment all fall through or 404, and none rewrites into `/admin`.
+- [x] Login page at 360 / 768 / 1440 px with 0px horizontal overflow, plus 1280 px at a 200% root font. Dashboard header at 360 px.
+
+**Known limit:** sessions are stateless JWTs, so logout clears the cookie in that browser but doesn't revoke the token. A copied cookie stays valid until it expires or the password is reset (verified above).
 
 ---
 

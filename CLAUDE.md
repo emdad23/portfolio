@@ -42,6 +42,8 @@ Mailpit is a **service in the compose file** so a fresh clone works with nothing
 
 Env vars: `SMTP_HOST`, `SMTP_PORT` (1025), `SMTP_SECURE` (false), optional `SMTP_USER` / `SMTP_PASS`, plus `MAIL_FROM` / `MAIL_TO` shared by both drivers (`RESEND_FROM_EMAIL` / `RESEND_TO_EMAIL` remain as fallbacks).
 
+**Admin env.** `ADMIN_PATH` is the secret URL segment the admin lives under, and `AUTH_SECRET` (≥32 chars, `openssl rand -base64 32`) signs the session cookie. The admin is enabled only when **both** are valid; otherwise every admin URL 404s and a `[admin] disabled: …` warning is logged. `ADMIN_PATH` must be set **at build time** too, because middleware inlines it. In `next dev`, *removing* either var from `.env` isn't seen by middleware until the dev server restarts.
+
 `sendContactEmail()` never throws and the route never fails on it — the `ContactSubmission` row is written first, so a mail error is logged with `console.warn` and the caller still gets `{ success: true }`. The Resend client is built lazily (`getResend()`) because its constructor throws when no API key is present.
 
 ## Architecture
@@ -60,7 +62,7 @@ Env vars: `SMTP_HOST`, `SMTP_PORT` (1025), `SMTP_SECURE` (false), optional `SMTP
 **Models:**
 - `BlogPost`: slug-addressed, with a `published` flag gating every query.
 - `ContactSubmission`.
-- `AdminUser`: created only by `npm run admin:create`.
+- `AdminUser`: created only by `npm run admin:create`, which also resets a password.
 - `Skill`: `row` 1 or 2 is the marquee row, ordered by `sortOrder`.
 - `Experience`: `startDate`, and `endDate` where null means Present. Both are stored as the first of the month in UTC. Also an optional `periodLabel` that replaces the date text, `countsTowardExperience` (default true; Early Career is false), and `metrics` / `projects` JSON columns.
 - The Skill and Experience seeders only fill an empty table, so a reseed never overwrites admin edits.
@@ -70,6 +72,12 @@ Env vars: `SMTP_HOST`, `SMTP_PORT` (1025), `SMTP_SECURE` (false), optional `SMTP
 - [page.tsx](src/app/page.tsx) passes that number to Hero, Ticker, Stats, Timeline and ForYou, and into `generateMetadata`. Never hard-code a years figure in copy.
 - The home page is statically rendered with `revalidate = 86400`, so the figure ticks over daily.
 - `src/lib/experience.ts` is Prisma-free, so client components can import its types (`TimelineEntry`, `ExperienceMetric`, …).
+
+**Admin auth and the hidden URL.** Admin routes live in `src/app/admin/` but are never served at `/admin`.
+- [src/middleware.ts](src/middleware.ts) 404s `/admin…` and rewrites `/<ADMIN_PATH>…` to `/admin…` (adding `X-Robots-Tag: noindex, nofollow`). Without a validly signed cookie it redirects to `/<ADMIN_PATH>/login`. Server-action POSTs pass straight through, so their own `requireAdmin()` redirect works.
+- Middleware only checks the JWT signature. **The real check is `requireAdmin()`** ([src/lib/auth/admin.ts](src/lib/auth/admin.ts)): **every admin server action and every admin page that loads data calls it**, not just the layout, because layouts and pages render in parallel. It also rejects sessions for deleted admins and sessions issued before the admin row's `updatedAt`, so `npm run admin:create` (a password reset) logs out every session.
+- Build admin links with `adminHref("/skills")`; never hard-code or publicly link the path. [src/lib/auth/config.ts](src/lib/auth/config.ts) and [session.ts](src/lib/auth/session.ts) are Edge-safe (middleware imports them); `admin.ts` is `server-only`.
+- The login throttle (5 attempts per IP per 15 min) is in-memory per instance and keys on `X-Forwarded-For`, so it relies on the host overwriting that header.
 
 **Server/client split.** Nearly every page is a server component that queries Prisma directly ([src/app/page.tsx](src/app/page.tsx), [src/app/blog/[slug]/page.tsx](src/app/blog/[slug]/page.tsx)). The API routes under `src/app/api/` exist for external/client consumption and duplicate those queries — changing what "published" means, or the post select shape, means touching both. Interactive chrome (Nav + CommandPalette) is isolated in [src/components/HomeClient.tsx](src/components/HomeClient.tsx) so the home page itself can stay a server component; follow that pattern rather than making a page a client component.
 
