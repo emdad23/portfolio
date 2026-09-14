@@ -3,27 +3,65 @@ import { useState } from "react";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { MagneticButton } from "@/components/ui/MagneticButton";
 
+type Field = "name" | "email" | "subject" | "message";
+
 export function Contact() {
   const [type, setType] = useState<"hiring" | "junior">("hiring");
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus("loading");
+    setErrors({});
     try {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, type }),
       });
-      if (!res.ok) throw new Error();
+
+      if (!res.ok) {
+        // A 400 carries Zod's per-field messages — show them on the fields
+        // instead of the generic failure notice.
+        const body = await res.json().catch(() => null);
+        const fieldErrors: Record<string, string[]> = body?.details?.fieldErrors ?? {};
+        const mapped = Object.fromEntries(
+          Object.entries(fieldErrors)
+            .filter(([, messages]) => messages?.length)
+            .map(([field, messages]) => [field, messages[0]])
+        ) as Partial<Record<Field, string>>;
+        setErrors(mapped);
+        setStatus("error");
+        return;
+      }
+
       setStatus("success");
       setForm({ name: "", email: "", subject: "", message: "" });
     } catch {
       setStatus("error");
     }
   };
+
+  // Mirrors contactSchema in @/lib/validations — keep the two in sync.
+  const limits = {
+    name: { minLength: 2, maxLength: 100 },
+    subject: { minLength: 3, maxLength: 200 },
+    message: { minLength: 10, maxLength: 5000 },
+  } as const;
+
+  const fieldClass = (field: Field) =>
+    `px-[0.88rem] py-[0.68rem] rounded-md border bg-white font-sans text-[0.83rem] text-black outline-none focus:shadow-[0_0_0_3px_rgba(0,0,0,.06)] transition-all ${
+      errors[field] ? "border-red-500 focus:border-red-500" : "border-border focus:border-black"
+    }`;
+
+  const FieldError = ({ field }: { field: Field }) =>
+    errors[field] ? (
+      <p id={`${field}-error`} className="text-[0.7rem] text-red-500">
+        {errors[field]}
+      </p>
+    ) : null;
 
   return (
     <section id="contact" className="py-[100px] px-[5%] bg-white">
@@ -83,24 +121,34 @@ export function Contact() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[0.68rem] font-bold text-text2">Name</label>
-                    <input required value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Your name" className="px-[0.88rem] py-[0.68rem] rounded-md border border-border bg-white font-sans text-[0.83rem] text-black outline-none focus:border-black focus:shadow-[0_0_0_3px_rgba(0,0,0,.06)] transition-all" />
+                    <label htmlFor="contact-name" className="text-[0.68rem] font-bold text-text2">Name</label>
+                    <input id="contact-name" required {...limits.name} value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Your name" aria-invalid={!!errors.name} aria-describedby={errors.name ? "name-error" : undefined} className={fieldClass("name")} />
+                    <FieldError field="name" />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[0.68rem] font-bold text-text2">Email</label>
-                    <input required type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="you@email.com" className="px-[0.88rem] py-[0.68rem] rounded-md border border-border bg-white font-sans text-[0.83rem] text-black outline-none focus:border-black focus:shadow-[0_0_0_3px_rgba(0,0,0,.06)] transition-all" />
+                    <label htmlFor="contact-email" className="text-[0.68rem] font-bold text-text2">Email</label>
+                    <input id="contact-email" required type="email" value={form.email} onChange={e => setForm(f => ({...f, email: e.target.value}))} placeholder="you@email.com" aria-invalid={!!errors.email} aria-describedby={errors.email ? "email-error" : undefined} className={fieldClass("email")} />
+                    <FieldError field="email" />
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-[0.68rem] font-bold text-text2">Subject</label>
-                  <input required value={form.subject} onChange={e => setForm(f => ({...f, subject: e.target.value}))} placeholder="What's on your mind?" className="px-[0.88rem] py-[0.68rem] rounded-md border border-border bg-white font-sans text-[0.83rem] text-black outline-none focus:border-black focus:shadow-[0_0_0_3px_rgba(0,0,0,.06)] transition-all" />
+                  <label htmlFor="contact-subject" className="text-[0.68rem] font-bold text-text2">Subject</label>
+                  <input id="contact-subject" required {...limits.subject} value={form.subject} onChange={e => setForm(f => ({...f, subject: e.target.value}))} placeholder="What's on your mind?" aria-invalid={!!errors.subject} aria-describedby={errors.subject ? "subject-error" : undefined} className={fieldClass("subject")} />
+                  <FieldError field="subject" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-[0.68rem] font-bold text-text2">Message</label>
-                  <textarea required value={form.message} onChange={e => setForm(f => ({...f, message: e.target.value}))} placeholder="Tell me about the opportunity, challenge, or just say hi..." className="px-[0.88rem] py-[0.68rem] rounded-md border border-border bg-white font-sans text-[0.83rem] text-black outline-none focus:border-black focus:shadow-[0_0_0_3px_rgba(0,0,0,.06)] resize-y min-h-[100px] transition-all" />
+                  <label htmlFor="contact-message" className="text-[0.68rem] font-bold text-text2">Message</label>
+                  <textarea id="contact-message" required {...limits.message} value={form.message} onChange={e => setForm(f => ({...f, message: e.target.value}))} placeholder="Tell me about the opportunity, challenge, or just say hi..." aria-invalid={!!errors.message} aria-describedby={errors.message ? "message-error" : undefined} className={`${fieldClass("message")} resize-y min-h-[100px]`} />
+                  <FieldError field="message" />
                 </div>
 
-                {status === "error" && <p className="text-[0.8rem] text-red-500">Something went wrong. Please try again.</p>}
+                {status === "error" && (
+                  <p className="text-[0.8rem] text-red-500">
+                    {Object.keys(errors).length > 0
+                      ? "Please fix the highlighted fields and try again."
+                      : "Something went wrong. Please try again."}
+                  </p>
+                )}
 
                 <MagneticButton className="w-full">
                   <button type="submit" disabled={status === "loading"} className="w-full bg-black text-white py-[0.85rem] rounded-md font-bold text-[0.875rem] cursor-none hover:bg-accent transition-colors duration-[220ms] disabled:opacity-60">
