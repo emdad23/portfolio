@@ -39,7 +39,7 @@ export function Nav({ onOpenPalette }: Props) {
           </button>
         </MagneticButton>
         <MagneticButton>
-          <a href="#contact" className="text-[0.82rem] font-bold text-white bg-black px-[1.1rem] py-[0.42rem] rounded-md no-underline cursor-none transition-all duration-[220ms] hover:bg-accent">
+          <a href="#contact" data-contact-type="hiring" className="text-[0.82rem] font-bold text-white bg-black px-[1.1rem] py-[0.42rem] rounded-md no-underline cursor-none transition-all duration-[220ms] hover:bg-accent">
             Hire Me →
           </a>
         </MagneticButton>

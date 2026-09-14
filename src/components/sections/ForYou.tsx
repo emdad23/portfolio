@@ -24,7 +24,7 @@ export function ForYou() {
             ))}
           </ul>
           <MagneticButton>
-            <a href="#contact" className="inline-flex items-center gap-2 bg-white text-black px-[1.6rem] py-3 rounded-md font-bold text-[0.875rem] no-underline cursor-none hover:bg-accent hover:text-white transition-all duration-200">Let&apos;s Discuss a Role →</a>
+            <a href="#contact" data-contact-type="hiring" className="inline-flex items-center gap-2 bg-white text-black px-[1.6rem] py-3 rounded-md font-bold text-[0.875rem] no-underline cursor-none hover:bg-accent hover:text-white transition-all duration-200">Let&apos;s Discuss a Role →</a>
           </MagneticButton>
         </ScrollReveal>
 
@@ -42,7 +42,7 @@ export function ForYou() {
             ))}
           </ul>
           <MagneticButton>
-            <a href="#contact" className="inline-flex items-center gap-2 bg-transparent text-black px-[1.6rem] py-3 rounded-md font-bold text-[0.875rem] no-underline border-[1.5px] border-black cursor-none hover:bg-black hover:text-white transition-all duration-200">Book a Free Chat →</a>
+            <a href="#contact" data-contact-type="junior" className="inline-flex items-center gap-2 bg-transparent text-black px-[1.6rem] py-3 rounded-md font-bold text-[0.875rem] no-underline border-[1.5px] border-black cursor-none hover:bg-black hover:text-white transition-all duration-200">Book a Free Chat →</a>
           </MagneticButton>
         </ScrollReveal>
       </div>

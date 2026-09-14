@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { commandGroups } from "@/data/nav";
+import { requestContactType } from "@/lib/contactType";
 
 interface Props {
   isOpen: boolean;
@@ -37,6 +38,7 @@ export function CommandPalette({ isOpen, onClose }: Props) {
     setTimeout(() => {
       const el = document.querySelector(item.href) as HTMLElement;
       if (el) window.scrollTo({ top: el.offsetTop - 70, behavior: "smooth" });
+      if (item.contactType) requestContactType(item.contactType);
     }, 150);
   };
 

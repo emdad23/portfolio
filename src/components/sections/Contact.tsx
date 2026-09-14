@@ -1,15 +1,49 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { MagneticButton } from "@/components/ui/MagneticButton";
+import { CONTACT_TYPES, CONTACT_TYPE_EVENT, isContactType, type ContactType } from "@/lib/contactType";
 
 type Field = "name" | "email" | "subject" | "message";
 
 export function Contact() {
-  const [type, setType] = useState<"hiring" | "junior">("hiring");
+  const [type, setType] = useState<ContactType>("hiring");
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
+  const typeButtons = useRef<Partial<Record<ContactType, HTMLButtonElement | null>>>({});
+
+  // Preselect a track from CTAs elsewhere on the page. See @/lib/contactType.
+  useEffect(() => {
+    const select = (next: ContactType) => {
+      setType(next);
+      // Park focus on the chosen tab so keyboard and screen-reader users land
+      // in the form. Deferred until the hash jump has run; preventScroll so it
+      // doesn't fight the smooth scroll (and no input grabs focus, which would
+      // pop the on-screen keyboard on touch).
+      setTimeout(() => typeButtons.current[next]?.focus({ preventScroll: true }), 0);
+    };
+
+    const onClick = (e: MouseEvent) => {
+      const trigger = (e.target as Element | null)?.closest<HTMLElement>("[data-contact-type]");
+      const next = trigger?.dataset.contactType;
+      if (isContactType(next)) select(next);
+    };
+    const onRequest = (e: Event) => {
+      const next = (e as CustomEvent<unknown>).detail;
+      if (isContactType(next)) select(next);
+    };
+
+    const fromQuery = new URLSearchParams(window.location.search).get("type");
+    if (isContactType(fromQuery)) setType(fromQuery);
+
+    document.addEventListener("click", onClick);
+    window.addEventListener(CONTACT_TYPE_EVENT, onRequest);
+    return () => {
+      document.removeEventListener("click", onClick);
+      window.removeEventListener(CONTACT_TYPE_EVENT, onRequest);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,10 +144,11 @@ export function Contact() {
             ) : (
               <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                 {/* Type toggle */}
-                <div className="flex gap-2 mb-2">
-                  {(["hiring","junior"] as const).map((t) => (
-                    <button key={t} type="button" onClick={() => setType(t)}
-                      className={`flex-1 py-2 rounded-md border text-[0.75rem] font-bold cursor-none transition-all ${type === t ? "border-black bg-black text-white" : "border-border bg-white text-muted hover:border-black"}`}>
+                <div role="group" aria-label="I'm reaching out as" className="flex gap-2 mb-2">
+                  {CONTACT_TYPES.map((t) => (
+                    <button key={t} type="button" onClick={() => setType(t)} aria-pressed={type === t}
+                      ref={(el) => { typeButtons.current[t] = el; }}
+                      className={`flex-1 py-2 rounded-md border text-[0.75rem] font-bold cursor-none transition-all outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 ${type === t ? "border-black bg-black text-white" : "border-border bg-white text-muted hover:border-black"}`}>
                       {t === "hiring" ? "💼 I'm Hiring" : "🎓 I'm a Junior Dev"}
                     </button>
                   ))}

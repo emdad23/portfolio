@@ -34,12 +34,12 @@ export function Hero() {
 
         <div className="flex gap-[0.875rem] flex-wrap mb-11">
           <MagneticButton>
-            <a href="#contact" className="bg-black text-white px-8 py-[0.85rem] rounded-md font-bold text-[0.9rem] no-underline inline-flex items-center gap-2 cursor-none transition-colors duration-[220ms] hover:bg-accent">
+            <a href="#contact" data-contact-type="hiring" className="bg-black text-white px-8 py-[0.85rem] rounded-md font-bold text-[0.9rem] no-underline inline-flex items-center gap-2 cursor-none transition-colors duration-[220ms] hover:bg-accent">
               Hire Me →
             </a>
           </MagneticButton>
           <MagneticButton>
-            <a href="#contact" className="bg-white text-black px-7 py-[0.85rem] rounded-md font-semibold text-[0.9rem] no-underline border border-border inline-flex items-center gap-2 cursor-none transition-all duration-[220ms] hover:border-black">
+            <a href="#contact" data-contact-type="junior" className="bg-white text-black px-7 py-[0.85rem] rounded-md font-semibold text-[0.9rem] no-underline border border-border inline-flex items-center gap-2 cursor-none transition-all duration-[220ms] hover:border-black">
               🎓 Junior Dev? Let&apos;s Talk
             </a>
           </MagneticButton>

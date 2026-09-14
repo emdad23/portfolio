@@ -25,7 +25,7 @@ Working task list. Each task records the root cause found in the code, the plann
 
 ## 2. "Hire Me" / "Junior Dev" buttons must preselect the matching tab
 
-**Status:** not started
+**Status:** done (2026-09-14)
 
 **Root cause.** [Contact.tsx:7](src/components/sections/Contact.tsx#L7) holds `type` in local state hardcoded to `"hiring"`, and every CTA is a plain `href="#contact"` anchor. Scrolling to the section is all that happens — nothing tells the form which track the visitor came from. Affected CTAs:
 
@@ -39,10 +39,14 @@ Working task list. Each task records the root cause found in the code, the plann
 | `🎓 Book Mentorship Chat` (⌘K palette) | [nav.ts:47](src/data/nav.ts#L47) | junior |
 
 **Plan.**
-- [ ] Mark each CTA with `data-contact-type="hiring" | "junior"` and have `Contact` register **one** document-level click listener for `a[data-contact-type]` that sets the state. This keeps [ForYou.tsx](src/components/sections/ForYou.tsx) a server component and avoids prop-drilling through the whole page — consistent with the server/client split rule in CLAUDE.md.
-- [ ] Also honour a `?type=junior` query param on load so cross-page links (e.g. `/#contact` from a blog post) can target a track.
-- [ ] Add the `type` to the ⌘K palette items so "Book Mentorship Chat" lands on the junior tab.
-- [ ] Give the selected tab `aria-pressed` / proper button semantics while in there, and make sure focus moves somewhere sensible after the jump (accessibility, not just visual selection).
+- [x] Mark each CTA with `data-contact-type="hiring" | "junior"` and have `Contact` register **one** document-level click listener for `a[data-contact-type]` that sets the state. This keeps [ForYou.tsx](src/components/sections/ForYou.tsx) a server component and avoids prop-drilling through the whole page — consistent with the server/client split rule in CLAUDE.md.
+- [x] Also honour a `?type=junior` query param on load so cross-page links (e.g. `/#contact` from a blog post) can target a track. Read from `window.location` in an effect rather than `useSearchParams`, so `/` stays statically prerendered without a Suspense boundary.
+- [x] Add the `type` to the ⌘K palette items so "Book Mentorship Chat" lands on the junior tab. `CommandItem.contactType` → `requestContactType()` dispatches a window event, since the palette scrolls programmatically instead of clicking a link.
+- [x] Give the selected tab `aria-pressed` / proper button semantics while in there, and make sure focus moves somewhere sensible after the jump (accessibility, not just visual selection). The toggle is a labelled `role="group"` with `aria-pressed` and a `focus-visible` ring. After a CTA jump, focus lands on the chosen tab (`preventScroll`, and deliberately not an input, which would pop the mobile keyboard).
+- [x] The track list lives in one zod-free module, [src/lib/contactType.ts](src/lib/contactType.ts), and `contactSchema` uses `z.enum(CONTACT_TYPES)` from it.
+- [x] **Tested** in headless Chrome at 1280px and 390px (touch). Each tagged CTA, clicked while the form is on the *opposite* track, selects the right tab, focuses it, and lands on `#contact`. The palette item selects junior, `?type=junior` preselects on load, `?type=bogus` falls back to hiring, and an untagged `#contact` link (footer) leaves the track alone. No page errors.
+
+**Gotcha hit while verifying:** running `npm run build` while `npm run dev` is up overwrites the shared `.next` with a production build. The dev server then 404s its CSS/JS and the homepage renders unstyled. Stop dev, `rm -rf .next`, restart.
 
 ---
 
