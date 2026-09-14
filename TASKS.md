@@ -71,16 +71,17 @@ Working task list. Each task records the root cause found in the code, the plann
 
 ## 4. Magnetic buttons travel too far and escape their container
 
-**Status:** not started
+**Status:** done (2026-09-14)
 
 **Root cause.** [MagneticButton.tsx:18-23](src/components/ui/MagneticButton.tsx#L18-L23) computes the offset from `getBoundingClientRect()` of the element **that is itself already translated**, so the measured centre chases the cursor and the offset compounds instead of converging. The displacement is also unbounded — `strength * (distance from centre)` with no cap — so a fast flick near the edge throws the button well outside its parent (visible on the hero CTA row and the nav).
 
 **Plan.**
-- [ ] Measure against the untranslated rect (subtract the current `x`/`y` motion values) so the offset is stable.
-- [ ] **Clamp** the result to a small maximum (~6–8px) on both axes, and lower the default `strength`.
-- [ ] Reset on `pointerleave` as well as `mouseleave`, so a fast exit that skips the event still snaps back.
-- [ ] Disable the effect entirely for touch/coarse pointers and under `prefers-reduced-motion` (ties into task 6).
-- [ ] Check the parent isn't clipping/overflowing once it moves less — the hero row and nav are the tight cases.
+- [x] Measure against the untranslated rect. It subtracts the **spring** values (`springX`/`springY`), not the raw `x`/`y` targets, because the spring is what is actually rendered into the transform.
+- [x] **Clamp** each axis to a new `max` prop (default `6`px), and lower the default `strength` from `0.22` to `0.15`.
+- [x] Reset on `pointerleave`, `pointercancel` and `mouseleave`. Tracking moved to `onPointerMove`, which ignores `pointerType === "touch"`.
+- [x] Disabled for touch/coarse pointers (`(hover: hover) and (pointer: fine)` via a new [useMediaQuery](src/hooks/useMediaQuery.ts) hook, `false` during SSR and hydration) and under framer's `useReducedMotion()`. If either flips while the button is displaced, it snaps back to 0. `useMediaQuery` is there for task 6 to reuse, since [TiltCard](src/components/ui/TiltCard.tsx) has the same unguarded mouse handling.
+- [x] Clipping: at max throw, none of the 7 instances (nav ⌘K + Hire Me, both hero CTAs, both ForYou CTAs, contact submit) crosses its nearest `overflow-hidden` ancestor. The tightest is the ForYou cards (40px padding).
+- [x] **Tested** in headless Chrome against the dev server. At 1280px, for every instance: a sweep to the far corner caps at 6px (the underdamped spring briefly overshoots to ~6.01), jiggling in place converges to the same value (`1.5px` for an 11px offset, no drift), and a one-step jump off the button snaps back to 0. With `reducedMotion: "reduce"` the button doesn't move. At 390px with touch emulation, the fine-pointer query is false and a tap leaves the offset at 0. No page errors. Type-checked with `tsc --noEmit`, not `npm run build`, because dev was running (see the task 2 gotcha).
 
 ---
 
