@@ -1,15 +1,18 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { commandGroups } from "@/data/nav";
+import { buildCommandGroups } from "@/data/nav";
 import { requestContactType } from "@/lib/contactType";
+import type { ContactDetails } from "@/lib/settings";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  contact: ContactDetails;
 }
 
-export function CommandPalette({ isOpen, onClose }: Props) {
+export function CommandPalette({ isOpen, onClose, contact }: Props) {
+  const commandGroups = useMemo(() => buildCommandGroups(contact), [contact]);
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [sel, setSel] = useState(0);

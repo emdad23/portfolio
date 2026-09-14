@@ -10,6 +10,7 @@ export default async function AdminPanelLayout({ children }: { children: React.R
     { href: adminHref("/"), label: "Dashboard" },
     { href: adminHref("/skills"), label: "Skills" },
     { href: adminHref("/experience"), label: "Experience" },
+    { href: adminHref("/settings"), label: "Settings" },
   ];
 
   return (

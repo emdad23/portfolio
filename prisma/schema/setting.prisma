@@ -1,0 +1,8 @@
+// Site-wide key/value settings (headline stats, contact details). The keys the
+// site reads are registered in src/lib/settings.ts; other rows are ignored.
+model Setting {
+  key       String   @id
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

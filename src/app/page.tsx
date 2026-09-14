@@ -15,6 +15,8 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { getSkillMarqueeRows } from "@/models/skill";
 import { getTimeline } from "@/models/experience";
+import { getSettings } from "@/models/setting";
+import { contactDetails, settingInt } from "@/lib/settings";
 
 // Nav + CommandPalette need client-side state — wrap in a client component
 import { HomeClient } from "@/components/HomeClient";
@@ -46,26 +48,37 @@ async function getRecentPosts() {
 }
 
 export default async function HomePage() {
-  const [posts, skillRows, { entries, yearsOfExperience }] = await Promise.all([
+  const [posts, skillRows, { entries, yearsOfExperience }, settings] = await Promise.all([
     getRecentPosts(),
     getSkillMarqueeRows(),
     getTimeline(),
+    getSettings(),
   ]);
+  const concurrentProjects = settingInt(settings, "stats.concurrentProjects");
+  const companiesLed = settingInt(settings, "stats.companiesLed");
+  const contact = contactDetails(settings);
 
   return (
     <>
-      <HomeClient />
-      <Hero yearsOfExperience={yearsOfExperience} />
+      <HomeClient contact={contact} />
+      <Hero
+        yearsOfExperience={yearsOfExperience}
+        concurrentProjects={concurrentProjects}
+        companiesLed={companiesLed}
+        linkedinConnections={settingInt(settings, "stats.linkedinConnections")}
+        locationFlag={settings["location.flag"]}
+        locationShort={settings["location.short"]}
+      />
       <Ticker yearsOfExperience={yearsOfExperience} />
-      <Stats yearsOfExperience={yearsOfExperience} />
+      <Stats yearsOfExperience={yearsOfExperience} concurrentProjects={concurrentProjects} companiesLed={companiesLed} />
       <Timeline entries={entries} yearsOfExperience={yearsOfExperience} />
       <WhatIDo />
       <Skills row1={skillRows[1]} row2={skillRows[2]} />
       <Projects />
       <BlogPreview posts={posts} />
       <ForYou yearsOfExperience={yearsOfExperience} />
-      <Contact />
-      <Footer />
+      <Contact contact={contact} location={settings["location.full"]} />
+      <Footer location={settings["location.full"]} />
     </>
   );
 }

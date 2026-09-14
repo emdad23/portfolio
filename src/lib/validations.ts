@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { CONTACT_TYPES } from "@/lib/contactType";
 import { METRIC_TYPES, fromMonthValue } from "@/lib/experience";
+import type { SettingKey } from "@/lib/settings";
 
 export const contactSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(100),
@@ -117,6 +118,52 @@ export const experienceSchema = z
     metrics: d.metrics.map((m) => (m.type === "default" ? { label: m.label } : m)),
     projects: d.projects,
   }));
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+// One validator per registered key (src/lib/settings.ts). Every value is stored
+// as a string, so each one outputs a normalised string.
+
+const trimmed = (schema: z.ZodString) => z.preprocess((v) => (typeof v === "string" ? v.trim() : v ?? ""), schema);
+
+const settingCount = trimmed(
+  z
+    .string()
+    .min(1, "Enter a whole number")
+    .regex(/^\d+$/, "Enter a whole number")
+    .refine((v) => Number(v) <= 100000, "Must be 100000 or less"),
+).transform((v) => String(Number(v))); // "007" → "7"
+
+const settingText = (label: string, max: number) =>
+  trimmed(z.string().min(1, `${label} is required`).max(max, `Keep it under ${max} characters`));
+
+export const settingsSchema = z.object({
+  "stats.concurrentProjects": settingCount,
+  "stats.companiesLed": settingCount,
+  "stats.linkedinConnections": settingCount,
+  "location.flag": settingText("Flag", 16),
+  "location.short": settingText("Short location", 40),
+  "location.full": settingText("Full location", 80),
+  "contact.email": trimmed(z.string().min(1, "Email is required").max(254).email("Enter a valid email address")).transform((v) =>
+    v.toLowerCase(),
+  ),
+  "contact.phone": trimmed(
+    z
+      .string()
+      .min(1, "Phone is required")
+      .max(40, "Keep it under 40 characters")
+      .regex(/^\+?[\d\s().-]+$/, "Use digits, spaces and + - ( ) only")
+      .refine((v) => {
+        const digits = v.replace(/\D/g, "").length;
+        return digits >= 7 && digits <= 15;
+      }, "A phone number has 7 to 15 digits"),
+  ),
+  "contact.linkedinUrl": z.preprocess(
+    (v) => (typeof v === "string" ? v.trim() : v ?? ""),
+    z
+      .url({ protocol: /^https$/, hostname: /^(www\.)?linkedin\.com$/i, error: "Enter your https://www.linkedin.com/… profile URL" })
+      .max(300, "Keep it under 300 characters"),
+  ),
+} satisfies Record<SettingKey, z.ZodType>);
 
 // Deliberately loose: a login only ever answers with one generic error.
 export const loginSchema = z.object({

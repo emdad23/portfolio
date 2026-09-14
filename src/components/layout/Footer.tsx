@@ -1,10 +1,10 @@
 import Link from "next/link";
 
-export function Footer() {
+export function Footer({ location }: { location: string }) {
   return (
     <footer className="bg-black px-[5%] py-8 flex justify-between items-center flex-wrap gap-4">
       <p className="text-[0.75rem] text-white/35">
-        © 2024 <strong className="text-white/70">Kazi Md Emdad Ullah</strong> · Principal Software Developer · Dhaka, Bangladesh
+        © 2024 <strong className="text-white/70">Kazi Md Emdad Ullah</strong> · Principal Software Developer · {location}
       </p>
       <div className="flex">
         {[["Top ↑","#hero"],["Experience","#timeline"],["Blog","/blog"],["Contact","#contact"]].map(([label, href]) => (

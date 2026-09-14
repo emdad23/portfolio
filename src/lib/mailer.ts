@@ -1,5 +1,7 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import { buildContactEmailHtml, getResend } from "@/lib/resend";
+import { DEFAULT_SETTINGS } from "@/lib/settings";
+import { getSettings } from "@/models/setting";
 
 /**
  * One mail entry point for the contact form, with two drivers:
@@ -18,7 +20,6 @@ export type SendResult =
   | { sent: false; driver: MailDriver; reason: string };
 
 const FROM_FALLBACK = "portfolio@emdad.dev";
-const TO_FALLBACK = "emdad.ullah@reddotdigitalit.com";
 
 /** A key that is still one of the documented placeholders is treated as absent. */
 function hasRealResendKey(): boolean {
@@ -37,8 +38,31 @@ function mailFrom() {
   return process.env.MAIL_FROM?.trim() || process.env.RESEND_FROM_EMAIL?.trim() || FROM_FALLBACK;
 }
 
-function mailTo() {
-  return process.env.MAIL_TO?.trim() || process.env.RESEND_TO_EMAIL?.trim() || TO_FALLBACK;
+// The documented .env.example placeholders don't count as an override.
+const PLACEHOLDER_TO = /^your@|@yourdomain\./i;
+
+/**
+ * An env var that overrides the `contact.email` setting as the recipient, so
+ * dev and staging never mail the real inbox. The settings page reports it.
+ */
+export function mailToOverride(): { envVar: "MAIL_TO" | "RESEND_TO_EMAIL"; address: string } | null {
+  for (const envVar of ["MAIL_TO", "RESEND_TO_EMAIL"] as const) {
+    const address = process.env[envVar]?.trim();
+    if (address && !PLACEHOLDER_TO.test(address)) return { envVar, address };
+  }
+  return null;
+}
+
+// Env override → the contact.email setting → its registry default.
+async function mailTo(): Promise<string> {
+  const override = mailToOverride();
+  if (override) return override.address;
+  try {
+    return (await getSettings())["contact.email"];
+  } catch (err) {
+    console.warn("Contact email: could not read the contact.email setting, using the default:", err);
+    return DEFAULT_SETTINGS["contact.email"];
+  }
 }
 
 // Cached across hot reloads in dev, the same way the Prisma client is.
@@ -83,7 +107,7 @@ export async function sendContactEmail(payload: ContactEmail): Promise<SendResul
 
   const mail = {
     from: mailFrom(),
-    to: mailTo(),
+    to: await mailTo(),
     replyTo: payload.email,
     subject: `[Portfolio] ${payload.subject}`,
     html: buildContactEmailHtml(payload),

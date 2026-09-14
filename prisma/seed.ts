@@ -6,6 +6,7 @@ import pg from "pg";
 import { seedBlogPosts } from "./seeds/blog-posts";
 import { seedSkills } from "./seeds/skills";
 import { seedExperiences } from "./seeds/experiences";
+import { seedSettings } from "./seeds/settings";
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -15,6 +16,7 @@ async function main() {
   await seedBlogPosts(prisma);
   await seedSkills(prisma);
   await seedExperiences(prisma);
+  await seedSettings(prisma);
 }
 
 main()

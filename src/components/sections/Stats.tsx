@@ -1,12 +1,20 @@
 "use client";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 
-export function Stats({ yearsOfExperience }: { yearsOfExperience: number }) {
+export function Stats({
+  yearsOfExperience,
+  concurrentProjects,
+  companiesLed,
+}: {
+  yearsOfExperience: number;
+  concurrentProjects: number;
+  companiesLed: number;
+}) {
   const stats = [
     { value: yearsOfExperience, suffix: "+", label: "Years Experience" },
-    { value: 7, suffix: "", label: "Concurrent Projects" },
+    { value: concurrentProjects, suffix: "", label: "Concurrent Projects" },
     { value: 1, suffix: "M+", label: "Users Reached", mode: "float" as const },
-    { value: 4, suffix: "+", label: "Companies Led" },
+    { value: companiesLed, suffix: "+", label: "Companies Led" },
   ];
 
   return (

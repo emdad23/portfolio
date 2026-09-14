@@ -446,6 +446,96 @@ One file for every table's schema, migration and seed didn't scale, so each conc
 
 ---
 
+## 12. Settings key/value table: headline stats and contact details
+
+**Status:** done (2026-09-15) · **Depends on:** 9 (panel shell, `Field`, `styles.ts`)
+
+**Root cause / context.** The remaining headline numbers and every contact detail are still typed by hand, often more than once, so a change means a code edit, a deploy, and hoping nothing was missed:
+
+| Value | Hard-coded in |
+| --- | --- |
+| `7` concurrent projects | [Stats.tsx:7](src/components/sections/Stats.tsx#L7) "Concurrent Projects", [Hero.tsx:84](src/components/sections/Hero.tsx#L84) bento "Projects at once" |
+| `4+` companies | [Stats.tsx:9](src/components/sections/Stats.tsx#L9) "Companies Led", [Hero.tsx:54](src/components/sections/Hero.tsx#L54) "Worked with 4+ companies" |
+| 🇧🇩 Dhaka, BD | [Hero.tsx:88-89](src/components/sections/Hero.tsx#L88-L89) bento tile; long form "Dhaka, Bangladesh" in [Contact.tsx:130](src/components/sections/Contact.tsx#L130) and [Footer.tsx:7](src/components/layout/Footer.tsx#L7) |
+| `500+` LinkedIn connections | [Hero.tsx:54](src/components/sections/Hero.tsx#L54) |
+| Email | [Contact.tsx:113](src/components/sections/Contact.tsx#L113), ⌘K "Send Email" in [nav.ts:48](src/data/nav.ts#L48), and the **recipient** fallback `TO_FALLBACK` in [mailer.ts:21](src/lib/mailer.ts#L21) (`MAIL_TO` / `RESEND_TO_EMAIL` env first) |
+| Phone | [Contact.tsx:114](src/components/sections/Contact.tsx#L114) (`+880 1833 184053` display, `tel:+8801833184053` href), ⌘K "WhatsApp / Call" in [nav.ts:50](src/data/nav.ts#L50) |
+| LinkedIn URL | [Contact.tsx:115](src/components/sections/Contact.tsx#L115) (href + a hand-shortened display string), ⌘K "Open LinkedIn" in [nav.ts:49](src/data/nav.ts#L49) |
+
+Goal: a key/value settings table that every one of these reads from, the same way years of experience already comes from the DB.
+
+**Decisions.**
+- **A plain key/value table.** `Setting { key, value }`, one row per setting, value always a string. Adding a setting later is a registry entry plus a seed line, with no migration.
+- **Keys are registered in code.** The site can only use keys the code reads, so a Prisma-free registry in `src/lib/settings.ts` lists each key with its label, group, hint and default value. The admin edits exactly the registered keys (no free-form add/delete), and unknown rows in the table are ignored.
+- **Store each value once, derive the variants.** The phone is stored as displayed (`+880 1833 184053`) and the `tel:` href strips everything but a leading `+` and digits. The LinkedIn URL is stored in full, and the display text (`linkedin.com/in/…`) drops the scheme, `www.` and the trailing slash. Counts are stored bare (`4`) and the `+` suffix stays in the markup, so `AnimatedCounter` still gets a number.
+- **One email for display and receiving.** The contact recipient becomes `MAIL_TO` env → `RESEND_TO_EMAIL` env → **the `contact.email` setting** → its registry default (which replaced `TO_FALLBACK`). The `.env.example` placeholders (`your@email.com`, `…@yourdomain.com`) don't count as an override. Env stays on top so dev and staging never mail the real inbox. The settings page says when an env override is active, so an edit that "does nothing" in production is explained (the fix there is to remove `MAIL_TO` from the host env).
+- **Never break the page over a missing row.** `getSettings()` fills any missing key from the registry default, so a fresh clone that skipped the seed still renders.
+
+**Keys and where each value is used:**
+
+| Key | Seed value | Used in |
+| --- | --- | --- |
+| `stats.concurrentProjects` | `7` | Stats "Concurrent Projects", Hero bento "Projects at once" |
+| `stats.companiesLed` | `4` | Stats "Companies Led" (`4+`), Hero "Worked with 4+ companies" |
+| `stats.linkedinConnections` | `500` | Hero "500+ LinkedIn connections" |
+| `location.flag` | `🇧🇩` | Hero bento location tile |
+| `location.short` | `Dhaka, BD` | Hero bento location tile |
+| `location.full` | `Dhaka, Bangladesh` | Contact "📍 … · Available for remote work", Footer |
+| `contact.email` | `emdad.ullah@reddotdigitalit.com` | Contact "Email" row, ⌘K "Send Email", **contact form recipient** |
+| `contact.phone` | `+880 1833 184053` | Contact "Phone / WhatsApp" row, ⌘K "WhatsApp / Call" |
+| `contact.linkedinUrl` | `https://www.linkedin.com/in/emdad-ullah-41956756/` | Contact "LinkedIn" row, ⌘K "Open LinkedIn" |
+
+**12.1 Schema, migration, seed, model**
+- [x] [prisma/schema/setting.prisma](prisma/schema/setting.prisma): `Setting` with `key String @id`, `value String @db.Text`, `createdAt`, `updatedAt`. Migration `20260914200348_add_setting`, then `prisma generate`. Prisma again rewrote `migration_lock.toml` with LF endings; reverted.
+- [x] [src/lib/settings.ts](src/lib/settings.ts) (Prisma-free, zod-free): `SETTING_GROUPS`, the `SETTINGS` registry (label, group, hint, input kind, max length, default), `SettingKey`, `Settings`, `SETTING_KEYS`, `DEFAULT_SETTINGS`, `settingInt()`, `contactDetails()`, `telHref()` and `linkedinDisplay()`.
+- [x] [prisma/seeds/settings.ts](prisma/seeds/settings.ts): `seedSettings(prisma)` with `createMany({ skipDuplicates: true })`, wired into [prisma/seed.ts](prisma/seed.ts).
+- [x] [src/models/setting.ts](src/models/setting.ts): `getSettings()` (React `cache()`, merged over the defaults), `settingsUpdatedAt()` and `saveSettings()` (one upsert per key in a `$transaction`).
+
+**12.2 Admin**
+- [x] `settingsSchema` in [validations.ts](src/lib/validations.ts): one validator per key, as planned. It is typed `satisfies Record<SettingKey, z.ZodType>`, so a key added to the registry without a validator fails `tsc`. The phone also only allows digits, spaces and `+ - ( )`.
+- [x] [actions/settings.ts](src/app/admin/actions/settings.ts): `saveSettingsAction` reads only `SETTING_KEYS` from the form, so a forged extra key is dropped. **Changed from the plan:** it revalidates `/` and the admin layout, not `/` as a layout, because the Footer only renders on the home page (the blog pages have no footer or contact details).
+- [x] [(panel)/settings/page.tsx](src/app/admin/(panel)/settings/page.tsx) + [SettingsForm](src/app/admin/(panel)/settings/SettingsForm.tsx), generated from the registry:
+  - Fieldsets per group, with each key's hint. The count hint notes that the "7 concurrent projects" wording in What I Do and the experience metric is written text and won't change.
+  - Live previews: "Call link: tel:…" and "Shown as: linkedin.com/in/…".
+  - After a failed save, focus goes to the first invalid field and a summary reports the count. After a successful save, a `role="status"` "Saved" line appears.
+  - The inputs are keyed by the settings' latest `updatedAt`, so after a save they remount showing the stored, normalised values (`009` → `9`, email lower-cased).
+  - Under Email: an amber note when `MAIL_TO` / `RESEND_TO_EMAIL` overrides the recipient, naming the address that actually gets mail, or a note when no mail transport is configured. `mailToOverride()` is exported from [mailer.ts](src/lib/mailer.ts) for this.
+- [x] "Settings" in the panel nav, and a fourth dashboard card with the contact email and "Manage settings →". The grid is now 1 → 2 (`sm`) → 4 (`lg`) columns.
+
+**12.3 Use the values on the public site**
+- [x] [page.tsx](src/app/page.tsx) adds `getSettings()` to its `Promise.all` and passes plain values.
+- [x] `Stats` and `Hero`, as planned. The location tile's text got `break-words`.
+- [x] `Contact`: rows built from `contact` via `telHref` / `linkedinDisplay`, and the footnote uses `location.full`. The row's text column is now `min-w-0` with `break-words` on the value, so a long email or LinkedIn path wraps inside the row at 360px instead of pushing past it.
+- [x] `Footer({ location })`.
+- [x] ⌘K: `commandGroups` became `buildCommandGroups(contact)` in [nav.ts](src/data/nav.ts). `HomeClient` passes `contact` to `CommandPalette`, which memoises the groups.
+- [x] [mailer.ts](src/lib/mailer.ts): `mailTo()` is async (override → setting → default), and a settings read error is logged and falls back to the default, so `sendContactEmail()` still never throws. `TO_FALLBACK` is gone.
+- [x] Sweep: `reddotdigitalit.com`, `8801833`, `41956756` and `Dhaka` appear in `src/` only as registry defaults and comments in `settings.ts`, plus the experience `companyLink`.
+
+**Gotcha hit while verifying:** the running `npm run dev` kept serving the pre-`generate` Prisma client, so `/` 500'd with `Cannot read properties of undefined (reading 'findMany')`. The compiled chunk had no `model Setting` in it, and touching the generated files didn't help. `prisma generate` replaces the output folder, and on Windows the dev watcher loses it. A dev restart fixed it. CLAUDE.md's "no restart needed" note is corrected.
+
+**12.4 Docs & verify**
+- [x] CLAUDE.md:
+  - § Environment: the recipient order, and "leave `MAIL_TO` unset in production".
+  - § Architecture: `Setting` in the models list, a **Site settings** section (registry, how to add a key, `getSettings()`, the derive helpers, "never hard-code"), and the corrected dev-restart note.
+  - `.env.example`: the `MAIL_TO` comment says the same.
+- [x] Verified with headless Chrome over DevTools against `npm run dev`, as a throwaway `task12-test@example.com` admin (deleted afterwards). `tsc --noEmit` is clean. 22 of 22 checks passed:
+  - Dashboard card and nav link; Settings is marked current; the form shows every stored value; the `MAIL_TO` note is shown (it's set in `.env`).
+  - **Validation:** a blank count, `not-an-email`, a non-LinkedIn URL, a 3-digit phone and a whitespace-only location each show their inline error. Focus goes to the first one, the summary says "5 fields need attention", and nothing is saved. `javascript:alert(1)` is rejected too.
+  - The live previews update as you type (`tel:+15550101234`, `linkedin.com/in/task12-test`).
+  - **Save:** `009` is stored as `9` and `Task12.Test@Example.com` as lower case, and the flag emoji round-trips. A hidden `evil.key` input is not written, and the inputs remount with the stored values.
+  - **Home page with every key changed:** "Worked with 5+ companies · 750+ LinkedIn connections", the 9 and the location tiles, the Stats props, the three contact hrefs and the LinkedIn text, "📍 Task City, Testland" and the footer, and the ⌘K contact props. No old value remains. At 1280px the ⌘K "Open LinkedIn" item opens the saved URL.
+  - **Replay:** the captured save, replayed without a cookie, returns 303 → login and changes nothing. The same request with the session cookie saves (positive control).
+  - Settings page at 360 / 768 / 1440 px and at 1280 px with a 200% root font: no horizontal overflow (screenshots checked).
+  - At 360px, a 78-character email wraps to 3 lines inside its contact row, and the LinkedIn path wraps too. No page errors.
+- [x] **Mail**, through `POST /api/contact` into Mailpit, with `MAIL_TO` temporarily commented out of `.env` (restored and byte-compared afterwards). The `RESEND_TO_EMAIL="your@email.com"` placeholder stayed set.
+  - With the setting changed to `task12.mail@example.com`, the message went to that address, so the placeholder was ignored.
+  - With `MAIL_TO` back, it went to `inbox@localhost`.
+  - The test submissions were deleted.
+  - Not exercised: the fallback when the settings read itself throws.
+- [x] **Missing rows:** with `location.full` deleted, the footer shows the default while an edited `stats.companiesLed = 8` still renders. With the table empty, `/` is 200 with every default. A reseed from one edited row inserts the other 8 keys and keeps the edit; a second run skips.
+
+---
+
 ## Suggested order
 
 Task 1 is independent (backend + env). Tasks 3 and 5 overlap on the blue/contrast question — do them together. Task 4 is self-contained. Task 2 touches the same files as 3, so land 3 first. Task 6 is last, since it will re-touch the nav, hero, and contact form that tasks 2–5 modify.
@@ -454,3 +544,5 @@ Admin panel: **7 → 11 → 8 → 9 → 10**.
 - Task 11 comes right after 7, so the public site switches to the DB (with the correct years) before any UI exists.
 - Tasks 9 and 10 both need 8.
 - Task 11 touches the same section components as task 6 (Hero, Stats, Ticker, ForYou, Timeline, Skills), but only their data and props, so either order works.
+
+Task 12 comes after 9 (it reuses the panel shell and form components). It edits Hero, Stats and Contact again, so if task 6 is still open, land 12's prop changes first and let 6 restyle on top.

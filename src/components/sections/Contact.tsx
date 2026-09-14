@@ -3,10 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import { MagneticButton } from "@/components/ui/MagneticButton";
 import { CONTACT_TYPES, CONTACT_TYPE_EVENT, isContactType, type ContactType } from "@/lib/contactType";
+import { linkedinDisplay, telHref, type ContactDetails } from "@/lib/settings";
 
 type Field = "name" | "email" | "subject" | "message";
 
-export function Contact() {
+export function Contact({ contact, location }: { contact: ContactDetails; location: string }) {
   const [type, setType] = useState<ContactType>("hiring");
   const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -110,24 +111,24 @@ export function Contact() {
           <p className="text-[0.95rem] text-text2 leading-[1.78] mb-8">Whether you want to talk about a role, a project, or you&apos;re a junior dev who needs 20 minutes of honest advice — reach out. I reply to every message personally.</p>
           <div className="flex flex-col gap-[0.65rem] mb-7">
             {[
-              { icon: "✉️", label: "Email", value: "emdad.ullah@reddotdigitalit.com", href: "mailto:emdad.ullah@reddotdigitalit.com" },
-              { icon: "📞", label: "Phone / WhatsApp", value: "+880 1833 184053", href: "tel:+8801833184053" },
-              { icon: "💼", label: "LinkedIn", value: "linkedin.com/in/emdad-ullah-41956756", href: "https://www.linkedin.com/in/emdad-ullah-41956756/" },
+              { icon: "✉️", label: "Email", value: contact.email, href: `mailto:${contact.email}` },
+              { icon: "📞", label: "Phone / WhatsApp", value: contact.phone, href: telHref(contact.phone) },
+              { icon: "💼", label: "LinkedIn", value: linkedinDisplay(contact.linkedinUrl), href: contact.linkedinUrl },
             ].map((opt) => (
               <ScrollReveal key={opt.label}>
                 <a href={opt.href} target={opt.href.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer"
                   className="flex items-center gap-4 p-[0.85rem] rounded-lg border border-border bg-white no-underline cursor-none group hover:border-black hover:bg-black transition-all duration-[220ms]">
                   <div className="w-9 h-9 rounded-md flex items-center justify-center text-[0.95rem] bg-gray border border-border flex-shrink-0 group-hover:bg-white/10 group-hover:border-white/10 transition-all duration-[220ms]">{opt.icon}</div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-[0.65rem] font-bold text-muted uppercase tracking-[1px] group-hover:text-white/40 transition-colors duration-[220ms]">{opt.label}</div>
-                    <div className="text-[0.83rem] font-semibold text-black group-hover:text-white transition-colors duration-[220ms]">{opt.value}</div>
+                    <div className="text-[0.83rem] font-semibold text-black break-words group-hover:text-white transition-colors duration-[220ms]">{opt.value}</div>
                   </div>
                   <span className="ml-auto text-muted group-hover:text-white transition-colors duration-[220ms]">→</span>
                 </a>
               </ScrollReveal>
             ))}
           </div>
-          <p className="text-[0.75rem] text-muted">📍 Dhaka, Bangladesh · Available for remote work worldwide</p>
+          <p className="text-[0.75rem] text-muted">📍 {location} · Available for remote work worldwide</p>
         </div>
 
         {/* Right — form */}

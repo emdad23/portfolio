@@ -42,13 +42,15 @@ Mailpit is a **service in the compose file** so a fresh clone works with nothing
 
 Env vars: `SMTP_HOST`, `SMTP_PORT` (1025), `SMTP_SECURE` (false), optional `SMTP_USER` / `SMTP_PASS`, plus `MAIL_FROM` / `MAIL_TO` shared by both drivers (`RESEND_FROM_EMAIL` / `RESEND_TO_EMAIL` remain as fallbacks).
 
+**Contact-form recipient:** `MAIL_TO` → `RESEND_TO_EMAIL` → the `contact.email` setting (admin → Settings) → that setting's registry default. The env vars are an override so dev and staging never mail the real inbox; the `.env.example` placeholders (`your@…`, `…@yourdomain.…`) don't count. **In production leave `MAIL_TO` unset**, or admin edits to the email won't change where mail goes (the Settings page warns when an override is active).
+
 **Admin env.** `ADMIN_PATH` is the secret URL segment the admin lives under, and `AUTH_SECRET` (≥32 chars, `openssl rand -base64 32`) signs the session cookie. The admin is enabled only when **both** are valid; otherwise every admin URL 404s and a `[admin] disabled: …` warning is logged. `ADMIN_PATH` must be set **at build time** too, because middleware inlines it. In `next dev`, *removing* either var from `.env` isn't seen by middleware until the dev server restarts.
 
 `sendContactEmail()` never throws and the route never fails on it — the `ContactSubmission` row is written first, so a mail error is logged with `console.warn` and the caller still gets `{ success: true }`. The Resend client is built lazily (`getResend()`) because its constructor throws when no API key is present.
 
 ## Architecture
 
-**Prisma client is generated, not imported from `@prisma/client`.** Its output is `src/generated/prisma`, which is gitignored. Import from `@/generated/prisma/client`. After cloning or changing the schema you must run `prisma generate` yourself: **Prisma 7's `migrate dev` no longer runs it.** The client uses the driver-adapter path (`PrismaPg` over a `pg.Pool`); see [src/lib/prisma.ts](src/lib/prisma.ts), which also caches the client on `globalThis` outside production. The cached client is replaced whenever it isn't an instance of the current `PrismaClient` class. After `prisma generate`, hot reload loads a new class, so a running `npm run dev` picks up new models and columns without a restart; a stale client would otherwise silently omit them. `prisma/seed.ts` and `scripts/create-admin.ts` construct their own client the same way rather than importing the singleton.
+**Prisma client is generated, not imported from `@prisma/client`.** Its output is `src/generated/prisma`, which is gitignored. Import from `@/generated/prisma/client`. After cloning or changing the schema you must run `prisma generate` yourself: **Prisma 7's `migrate dev` no longer runs it.** The client uses the driver-adapter path (`PrismaPg` over a `pg.Pool`); see [src/lib/prisma.ts](src/lib/prisma.ts), which also caches the client on `globalThis` outside production. The cached client is replaced whenever it isn't an instance of the current `PrismaClient` class. After `prisma generate`, hot reload normally loads a new class, so a running `npm run dev` picks up new columns without a restart; a stale client would otherwise silently omit them. **This is not reliable on Windows:** `generate` replaces the output folder and the dev server's watcher can lose it. After adding the `Setting` model, `prisma.setting` stayed `undefined` (`Cannot read properties of undefined (reading 'findMany')`) until `next dev` was restarted. Restart dev after a schema change if a new model or column is missing. `prisma/seed.ts` and `scripts/create-admin.ts` construct their own client the same way rather than importing the singleton.
 
 **One file per model, migration and seeder:**
 
@@ -65,7 +67,15 @@ Env vars: `SMTP_HOST`, `SMTP_PORT` (1025), `SMTP_SECURE` (false), optional `SMTP
 - `AdminUser`: created only by `npm run admin:create`, which also resets a password.
 - `Skill`: `row` 1 or 2 is the marquee row, ordered by `sortOrder`.
 - `Experience`: `startDate`, and `endDate` where null means Present. Both are stored as the first of the month in UTC. Also an optional `periodLabel` that replaces the date text, `countsTowardExperience` (default true; Early Career is false), and `metrics` / `projects` JSON columns.
-- The Skill and Experience seeders only fill an empty table, so a reseed never overwrites admin edits.
+- `Setting`: a key/value table (`key` primary key, `value` text). See **Site settings** below.
+- The Skill and Experience seeders only fill an empty table, so a reseed never overwrites admin edits. The Settings seeder inserts only keys that have no row (`skipDuplicates`), so a reseed adds new keys and never overwrites a value.
+
+**Site settings are key/value, and never hard-coded in copy.** Headline stats (concurrent projects, companies, LinkedIn connections), location (flag, short, full) and contact details (email, phone, LinkedIn URL) live in the `Setting` table.
+- Every key the site reads is registered in `SETTINGS` in [src/lib/settings.ts](src/lib/settings.ts), with its label, group, hint, input kind and default. That module is Prisma- and zod-free, so client components import it. The admin Settings page is generated from the registry; only registered keys are read or written, and other rows are ignored.
+- To add a setting: add it to `SETTINGS`, add its validator to `settingsSchema` in [validations.ts](src/lib/validations.ts) (`satisfies Record<SettingKey, …>` makes a missing one a type error), then run `npm run db:seed` or save the Settings page. No migration is needed.
+- `getSettings()` ([src/models/setting.ts](src/models/setting.ts), React `cache`) returns every registered key, falling back to the default for a missing row. [page.tsx](src/app/page.tsx) passes plain values to Hero, Stats, Contact, Footer and `HomeClient` (for the ⌘K contact items, built by `buildCommandGroups(contact)` in [nav.ts](src/data/nav.ts)).
+- Values are strings. Read counts with `settingInt()`; the `+` suffix stays in the markup. The phone is stored as displayed, and `telHref()` builds the `tel:` link. The LinkedIn URL is stored in full, and `linkedinDisplay()` builds the short text.
+- Prose that repeats a figure ("7 concurrent high-stakes projects" in `whatIDo.ts`, the experience metric) is written text and doesn't follow the setting.
 
 **Years of experience is computed, never typed.** `calculateYearsOfExperience` in [src/lib/experience.ts](src/lib/experience.ts) builds one span per entry, from the start month through the end of the end month (or now). It merges overlapping or touching spans, sums them in calendar months, and floors to whole years. **Career breaks are not counted**, and neither are entries with `countsTowardExperience = false`. Those still show on the timeline.
 - `getTimeline()` ([src/models/experience.ts](src/models/experience.ts), React `cache`) returns the timeline entries and `yearsOfExperience`.
@@ -84,9 +94,9 @@ Env vars: `SMTP_HOST`, `SMTP_PORT` (1025), `SMTP_SECURE` (false), optional `SMTP
 
 **Home page is one long scroll** of section components from `src/components/sections/`, each rendering an `id` anchor (`hero`, `timeline`, `what`, `skills`, `projects`, `blog`, `for-you`, `contact`). Those ids are the contract for `useActiveSection`, the nav links, and the ⌘K command palette — all defined in [src/data/nav.ts](src/data/nav.ts). Add a section → add its id in all three places.
 
-**Static content lives in `src/data/`** as typed TypeScript arrays (projects, whatIDo, nav), each exporting its own interface. **Skills, experience and blog posts come from the database.** The server page fetches them and passes plain serializable props to the section components; no `Date` crosses into a client component.
+**Static content lives in `src/data/`** as typed TypeScript arrays (projects, whatIDo, nav), each exporting its own interface. **Skills, experience, blog posts and site settings come from the database.** The server page fetches them and passes plain serializable props to the section components; no `Date` crosses into a client component.
 
-**Contact flow**: [Contact.tsx](src/components/sections/Contact.tsx) POSTs to [/api/contact](src/app/api/contact/route.ts) → `contactSchema` (Zod, in [src/lib/validations.ts](src/lib/validations.ts)) → DB row → Resend email built by `buildContactEmailHtml`. The `type` field (`"hiring" | "junior"`) drives the site's two audience tracks and is enumerated in the schema, the Zod validator, and the email template.
+**Contact flow**: [Contact.tsx](src/components/sections/Contact.tsx) POSTs to [/api/contact](src/app/api/contact/route.ts) → `contactSchema` (Zod, in [src/lib/validations.ts](src/lib/validations.ts)) → DB row → `sendContactEmail()` (body built by `buildContactEmailHtml`, recipient resolved as in § Environment). The `type` field (`"hiring" | "junior"`) drives the site's two audience tracks and is enumerated in the schema, the Zod validator, and the email template.
 
 ## Styling
 
