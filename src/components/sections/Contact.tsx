@@ -186,7 +186,7 @@ export function Contact() {
                 )}
 
                 <MagneticButton className="w-full">
-                  <button type="submit" disabled={status === "loading"} className="w-full bg-black text-white py-[0.85rem] rounded-md font-bold text-[0.875rem] cursor-none hover:bg-accent transition-colors duration-[220ms] disabled:opacity-60">
+                  <button type="submit" disabled={status === "loading"} className="w-full bg-black text-white py-[0.85rem] rounded-md font-bold text-[0.875rem] cursor-none transition-all duration-[220ms] hover:bg-black-3 hover:shadow-[3px_3px_0_#444] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:opacity-60 disabled:bg-black disabled:shadow-none">
                     {status === "loading" ? "Sending..." : "Send Message →"}
                   </button>
                 </MagneticButton>

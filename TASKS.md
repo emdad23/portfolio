@@ -52,7 +52,7 @@ Working task list. Each task records the root cause found in the code, the plann
 
 ## 3. Replace the off-theme blue button hovers
 
-**Status:** not started
+**Status:** done (2026-09-14)
 
 **Root cause.** The palette is monochrome (black / gray / white) with `accent: #2563EB` intended as a *typographic* accent — it is used correctly on the hero `FlipWords` ([Hero.tsx:26](src/components/sections/Hero.tsx#L26)) and blog prose links. But `hover:bg-accent` was also applied to solid buttons, so they flip to saturated blue on hover, which reads as a different design system:
 
@@ -62,9 +62,10 @@ Working task list. Each task records the root cause found in the code, the plann
 - [blog/[slug]/page.tsx:39](src/app/blog/[slug]/page.tsx#L39) — `Get in touch →`
 
 **Plan.**
-- [ ] Black buttons: hover stays monochrome — lift to `black-3` (`#1A1A1A`) and/or use the offset hard shadow already established elsewhere (`hover:shadow-[4px_4px_0_#0A0A0A]` in the hero bento / ForYou cards) so hover feedback matches the rest of the site.
-- [ ] Keep `accent` for text/links only. Record that rule in CLAUDE.md § Styling so it does not creep back in.
-- [ ] Sweep for any other `hover:bg-accent` / hardcoded `#2563EB` while in there.
+- [x] Black buttons: hover stays monochrome — `hover:bg-black-3` plus an offset hard shadow, `hover:shadow-[3px_3px_0_#444]` (`2px` on the small nav button). `#444` rather than `#0A0A0A` because a black shadow under a black button just reads as a bigger button. No translate lift: all but the blog CTA sit inside `MagneticButton`, which already moves them (task 4). The submit button drops the shadow when `disabled`.
+- [x] Keep `accent` for text/links only. Recorded in CLAUDE.md § Styling, along with the hover recipe.
+- [x] Swept for other `hover:bg-accent` / hardcoded `#2563EB`. Found one more: [ForYou.tsx:27](src/components/sections/ForYou.tsx#L27) `Let's Discuss a Role →` (white button on the black card) went blue with white text on hover — now `hover:bg-gray` + the same `#444` offset shadow. The only remaining `#2563EB` is the cursor hover colour in [CustomCursor.tsx:58](src/components/layout/CustomCursor.tsx#L58), left for task 5, which reworks that component.
+- [x] Every touched button also got a `focus-visible` ring (`ring-black ring-offset-2`; `ring-white ring-offset-black` on the dark card), since hover-only feedback fails keyboard users.
 
 ---
 

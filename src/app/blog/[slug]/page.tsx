@@ -36,7 +36,7 @@ export default async function BlogPostPage({ params }: Props) {
 
         <div className="mt-16 pt-12 border-t border-border">
           <p className="text-[0.85rem] text-muted mb-4">Found this useful? Let&apos;s connect.</p>
-          <Link href="/#contact" className="inline-flex items-center gap-2 bg-black text-white px-6 py-3 rounded-md font-bold text-[0.875rem] no-underline cursor-none hover:bg-accent transition-colors">Get in touch →</Link>
+          <Link href="/#contact" className="inline-flex items-center gap-2 bg-black text-white px-6 py-3 rounded-md font-bold text-[0.875rem] no-underline cursor-none transition-all duration-[220ms] hover:bg-black-3 hover:shadow-[3px_3px_0_#444] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2">Get in touch →</Link>
         </div>
       </div>
     </main>

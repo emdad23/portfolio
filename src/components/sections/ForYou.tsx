@@ -24,7 +24,7 @@ export function ForYou() {
             ))}
           </ul>
           <MagneticButton>
-            <a href="#contact" data-contact-type="hiring" className="inline-flex items-center gap-2 bg-white text-black px-[1.6rem] py-3 rounded-md font-bold text-[0.875rem] no-underline cursor-none hover:bg-accent hover:text-white transition-all duration-200">Let&apos;s Discuss a Role →</a>
+            <a href="#contact" data-contact-type="hiring" className="inline-flex items-center gap-2 bg-white text-black px-[1.6rem] py-3 rounded-md font-bold text-[0.875rem] no-underline cursor-none transition-all duration-200 hover:bg-gray hover:shadow-[3px_3px_0_#444] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black">Let&apos;s Discuss a Role →</a>
           </MagneticButton>
         </ScrollReveal>
 

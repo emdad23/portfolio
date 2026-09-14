@@ -34,7 +34,7 @@ export function Hero() {
 
         <div className="flex gap-[0.875rem] flex-wrap mb-11">
           <MagneticButton>
-            <a href="#contact" data-contact-type="hiring" className="bg-black text-white px-8 py-[0.85rem] rounded-md font-bold text-[0.9rem] no-underline inline-flex items-center gap-2 cursor-none transition-colors duration-[220ms] hover:bg-accent">
+            <a href="#contact" data-contact-type="hiring" className="bg-black text-white px-8 py-[0.85rem] rounded-md font-bold text-[0.9rem] no-underline inline-flex items-center gap-2 cursor-none transition-all duration-[220ms] hover:bg-black-3 hover:shadow-[3px_3px_0_#444] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2">
               Hire Me →
             </a>
           </MagneticButton>

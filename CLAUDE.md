@@ -61,6 +61,8 @@ Env vars: `SMTP_HOST`, `SMTP_PORT` (1025), `SMTP_SECURE` (false), optional `SMTP
 
 Tailwind only — no CSS modules, and `globals.css` holds just the theme vars, keyframes, and a few escaped animation utilities. Palette and the extra `md2: 960px` breakpoint are in [tailwind.config.ts](tailwind.config.ts); use the named tokens (`black-2`, `border`, `muted`, `text2`, `accent`) rather than raw hex. Arbitrary-value classes (`text-[clamp(...)]`, `tracking-[-1.5px]`) are the house style for typography.
 
+**`accent` (`#2563EB`) is for text and links only** — the hero `FlipWords`, blog prose links. Never use it as a fill, border, or shadow (`hover:bg-accent` on a button reads as a different design system). Button hovers stay monochrome: a black button lifts to `bg-black-3` with an offset hard shadow (`hover:shadow-[3px_3px_0_#444]`, `2px` on the small nav button), the same offset-shadow language as the hero bento and ForYou cards; an outlined button inverts to black. Pair every button hover with a `focus-visible:ring-*` (`ring-black ring-offset-2` on light surfaces, `ring-white ring-offset-black` on dark ones).
+
 `body { cursor: none }` because [CustomCursor.tsx](src/components/layout/CustomCursor.tsx) draws its own cursor (disabled under 960px). Every interactive element therefore carries `cursor-none`; the cursor grows on `a, button, [data-cursor='hover'], .hover-cursor`. New clickable elements need `cursor-none` or the native cursor reappears.
 
 Animation is framer-motion. Wrap entrance animations in the shared [ScrollReveal](src/components/ui/ScrollReveal.tsx) (`whileInView`, `once: true`) instead of hand-rolling viewport variants.
