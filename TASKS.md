@@ -279,28 +279,40 @@ One file for every table's schema, migration and seed didn't scale, so each conc
 
 ## 9. Admin UI: shell, dashboard, skills manager
 
-**Status:** not started · **Depends on:** 8
+**Status:** done (2026-09-15) · **Depends on:** 8
 
 **9.1 Panel shell**
-- [ ] `src/app/admin/(panel)/layout.tsx`: calls `requireAdmin()` and renders nav links for Dashboard / Skills / Experience / Log out.
-  - Hrefs are built server-side with `adminHref` and passed as props.
-  - The nav follows the container rules (`px-5 md2:px-[5%]`, `max-w-[1200px]`) and becomes a wrapping link row on phones.
+- [x] [(panel)/layout.tsx](src/app/admin/(panel)/layout.tsx): calls `requireAdmin()` and renders the brand, the nav, the admin's email and Log out.
+  - Hrefs are built server-side with `adminHref` and passed to the [AdminNav](src/app/admin/(panel)/AdminNav.tsx) client component. It compares them to `usePathname()` (the public `/<ADMIN_PATH>/…` URL) to set `aria-current="page"`.
+  - Container rules (`px-5 md2:px-[5%]`, `max-w-[1200px]`). On phones the brand and account share the first line and the nav wraps to a full-width second line. Every target is `min-h-11`.
+  - **Experience is not in the nav yet:** a link now would 404, so task 10 adds it along with its pages.
+- [x] Shared admin UI: [src/components/admin/styles.ts](src/components/admin/styles.ts) holds the field, label, error and button class strings. It is a plain module, so server components get real strings; exporting them from a `"use client"` file would hand servers a client reference. [SubmitButton.tsx](src/components/admin/SubmitButton.tsx) uses `useFormStatus`. The login form now uses both.
+- [x] [src/lib/actionState.ts](src/lib/actionState.ts): the `ActionState<Field>` shape (`errors`, `message`, `savedAt`) returned by admin actions, plus `fieldErrors(zodError)` and `isRecordNotFound` (Prisma P2025). Task 10 reuses them.
 
 **9.2 Dashboard**
-- [ ] `(panel)/page.tsx`: the computed years (from task 11.1, a placeholder until then), skill count and experience count.
+- [x] [(panel)/page.tsx](src/app/admin/(panel)/page.tsx): years of experience (`getTimeline()`, the same number the site shows), skill count with a "Manage skills →" link, and experience count. It is a `dl` that goes 1 → 3 columns at `sm`.
 
 **9.3 Skills manager**
-- [ ] `skillSchema` in [validations.ts](src/lib/validations.ts): `name` required, `icon` optional, `row` 1 or 2, `sortOrder` an integer.
-- [ ] `actions/skills.ts`: `createSkill`, `updateSkill` and `deleteSkill`. Each runs `requireAdmin()`, then Zod, then Prisma, then `revalidatePath("/")` and the skills admin path.
-- [ ] `(panel)/skills/page.tsx` + a `SkillsManager` client component:
-  - Skills grouped by row, with an add form (icon, name, row).
-  - Inline edit, including sort order, and delete with confirm.
-  - Validation errors show inline.
+- [x] `skillSchema` in [validations.ts](src/lib/validations.ts): `name` trimmed and required (≤60), `icon` optional (≤16, blank → null), `row` 1 or 2, `sortOrder` a whole number from 0 to 9999. A blank sort order is an error, not a silent 0.
+- [x] [actions/skills.ts](src/app/admin/actions/skills.ts): `createSkillAction`, `updateSkillAction` and `deleteSkillAction`. Each runs `requireAdmin()`, then Zod, then Prisma, then `revalidatePath("/")` + `revalidatePath("/admin", "layout")`.
+  - Create omits the sort order and appends to the end of the row (`nextSkillSortOrder` in [models/skill.ts](src/models/skill.ts)).
+  - Update on a row deleted elsewhere returns a form message instead of throwing. Delete of an already-deleted row counts as success.
+- [x] [(panel)/skills/page.tsx](src/app/admin/(panel)/skills/page.tsx) + [SkillsManager](src/app/admin/(panel)/skills/SkillsManager.tsx):
+  - An add form (icon, name, row) that clears and refocuses Name after each add.
+  - Skills grouped by row with counts, and `#sortOrder` shown on each.
+  - Inline edit (icon, name, row, sort order): focus moves to Name, Escape or Cancel closes it, and focus returns to the Edit button.
+  - Delete asks inline for confirmation (not `window.confirm`), with focus on Cancel.
+  - Validation errors show under each field, with `aria-invalid` / `aria-describedby`.
+  - Fields wrap with `flex-wrap` + basis, so they stack on phones and sit on one line on desktop.
 
-**9.4 Verify**
-- [ ] Add, edit and delete round-trips persist.
-- [ ] Calling `deleteSkill` without the cookie doesn't mutate.
-- [ ] Check at 360 / 768 / 1440 px.
+**9.4 Verify**: headless Chrome over DevTools against `npm run dev`, as a throwaway `task9-test@example.com` admin (deleted afterwards). `tsc --noEmit` is clean.
+- [x] Dashboard shows 12+, 25 and 6, matching the DB. The nav marks the current page, and the dashboard link client-navigates to Skills.
+- [x] Add: a blank name gives the inline "Name is required". A valid add persists `🧪 / row 2 / sortOrder 12` (end of row 2), clears the form, and shows on `/`.
+- [x] Edit: a blank name plus sort order −1 show both errors inline and persist nothing. A valid edit persists the new icon, name, row 1 and sort order 0; the skill moves from row 2 to the top of row 1, and `/` shows the new label, not the old one.
+- [x] Delete: Cancel keeps the skill, and confirming removes it from the DB, the list and `/`.
+- [x] The browser's real delete request (captured `Next-Action` + body) was replayed against another skill. Without a cookie, and with a forged one, it returned 303 → login and the row survived. The same replay **with** the session cookie deleted it (positive control).
+- [x] 360 / 768 / 1440 px: no horizontal overflow on the dashboard or Skills; also Skills at 1280 px with a 200% root font. The first pass wrapped every skill's buttons onto a second line at 360 px; with a smaller name basis the buttons now share the line (page 3225 → 2459 px tall).
+- [ ] `revalidatePath` against a **production** build is still unchecked (dev renders `/` dynamically, so the round trips above can't prove it). Check it with `npm run build && npm start` while dev is stopped.
 
 ---
 

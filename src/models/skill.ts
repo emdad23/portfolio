@@ -34,6 +34,12 @@ export const getSkillMarqueeRows = cache(async (): Promise<Record<SkillRow, stri
   return rows;
 });
 
+// The sortOrder that puts a new skill at the end of its row.
+export async function nextSkillSortOrder(row: SkillRow): Promise<number> {
+  const { _max } = await prisma.skill.aggregate({ where: { row }, _max: { sortOrder: true } });
+  return (_max.sortOrder ?? -1) + 1;
+}
+
 export function createSkill(data: SkillInput) {
   return prisma.skill.create({ data });
 }
