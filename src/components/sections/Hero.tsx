@@ -4,7 +4,7 @@ import { FlipWords } from "@/components/ui/FlipWords";
 import { TiltCard } from "@/components/ui/TiltCard";
 import { MagneticButton } from "@/components/ui/MagneticButton";
 
-export function Hero() {
+export function Hero({ yearsOfExperience }: { yearsOfExperience: number }) {
   return (
     <section id="hero" className="min-h-screen pt-[88px] pb-[70px] px-[5%] grid md2:grid-cols-[1.1fr_0.9fr] gap-12 items-center bg-white relative overflow-hidden after:content-[''] after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-border">
       <ParticleCanvas />
@@ -29,7 +29,7 @@ export function Hero() {
         </h1>
 
         <p className="text-base text-text2 leading-[1.82] max-w-[500px] mb-10">
-          With <strong className="text-black font-semibold">11+ years</strong> across eCommerce, CRM, and enterprise automation — my real edge is the teams I build and the clients who trust me to deliver.
+          With <strong className="text-black font-semibold">{yearsOfExperience}+ years</strong> across eCommerce, CRM, and enterprise automation — my real edge is the teams I build and the clients who trust me to deliver.
         </p>
 
         <div className="flex gap-[0.875rem] flex-wrap mb-11">
@@ -59,7 +59,7 @@ export function Hero() {
       <div className="hidden md2:block relative z-10">
         <div className="grid grid-cols-2 gap-3">
           <TiltCard className="bg-white border border-border rounded-xl p-5 cursor-none hover:border-black hover:shadow-[4px_4px_0_#0A0A0A] transition-all">
-            <div className="text-[2.5rem] font-black tracking-[-2px] leading-none font-mono">11+</div>
+            <div className="text-[2.5rem] font-black tracking-[-2px] leading-none font-mono">{yearsOfExperience}+</div>
             <div className="text-[0.67rem] font-semibold text-muted mt-1 uppercase tracking-[0.8px]">Years Exp.</div>
           </TiltCard>
           <TiltCard className="bg-white border border-border rounded-xl p-5 cursor-none hover:border-black hover:shadow-[4px_4px_0_#0A0A0A] transition-all">

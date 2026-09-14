@@ -1,14 +1,14 @@
 "use client";
 import { AnimatedCounter } from "@/components/ui/AnimatedCounter";
 
-const stats = [
-  { value: 11, suffix: "+", label: "Years Experience" },
-  { value: 7, suffix: "", label: "Concurrent Projects" },
-  { value: 1, suffix: "M+", label: "Users Reached", mode: "float" as const },
-  { value: 4, suffix: "+", label: "Companies Led" },
-];
+export function Stats({ yearsOfExperience }: { yearsOfExperience: number }) {
+  const stats = [
+    { value: yearsOfExperience, suffix: "+", label: "Years Experience" },
+    { value: 7, suffix: "", label: "Concurrent Projects" },
+    { value: 1, suffix: "M+", label: "Users Reached", mode: "float" as const },
+    { value: 4, suffix: "+", label: "Companies Led" },
+  ];
 
-export function Stats() {
   return (
     <div className="py-[70px] px-[5%] bg-gray">
       <div className="grid grid-cols-1 md2:grid-cols-4 gap-px bg-border border border-border rounded-xl overflow-hidden">

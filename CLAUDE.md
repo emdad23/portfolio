@@ -21,6 +21,7 @@ make up                      # start app (localhost:3000) + db + mailpit (localh
 ./portfolio fresh            # reset db and reseed
 make studio                  # Prisma Studio from the host against port 5433
 npm run db:seed              # seed (host-side; needs a local .env)
+npm run admin:create -- you@example.com   # create an admin, or reset its password
 ```
 
 There is **no test suite and no ESLint config** — `eslint` is not even a dependency, so `npm run lint` will drop into Next's interactive setup prompt. Verify changes with `./portfolio build` (or `npm run build`), which type-checks the whole project.
@@ -45,15 +46,36 @@ Env vars: `SMTP_HOST`, `SMTP_PORT` (1025), `SMTP_SECURE` (false), optional `SMTP
 
 ## Architecture
 
-**Prisma client is generated, not imported from `@prisma/client`.** `prisma/schema.prisma` sets `output = "../src/generated/prisma"`, which is gitignored. Import from `@/generated/prisma/client`; after cloning or changing the schema you must run `prisma generate` (a migrate/seed command does it implicitly). The client uses the driver-adapter path (`PrismaPg` over a `pg.Pool`) — see [src/lib/prisma.ts](src/lib/prisma.ts), which also caches the client on `globalThis` outside production. `prisma/seed.ts` constructs its own client the same way rather than importing the singleton.
+**Prisma client is generated, not imported from `@prisma/client`.** Its output is `src/generated/prisma`, which is gitignored. Import from `@/generated/prisma/client`. After cloning or changing the schema you must run `prisma generate` yourself: **Prisma 7's `migrate dev` no longer runs it.** The client uses the driver-adapter path (`PrismaPg` over a `pg.Pool`); see [src/lib/prisma.ts](src/lib/prisma.ts), which also caches the client on `globalThis` outside production. The cached client is replaced whenever it isn't an instance of the current `PrismaClient` class. After `prisma generate`, hot reload loads a new class, so a running `npm run dev` picks up new models and columns without a restart; a stale client would otherwise silently omit them. `prisma/seed.ts` and `scripts/create-admin.ts` construct their own client the same way rather than importing the singleton.
 
-**Two models only**: `BlogPost` (slug-addressed, `published` flag gating every query) and `ContactSubmission`.
+**One file per model, migration and seeder:**
+
+| Concern | Location |
+| --- | --- |
+| Table definition | `prisma/schema/<model>.prisma`. The generator + datasource live in `schema.prisma`, and [prisma.config.ts](prisma.config.ts) points `schema` at the folder |
+| Migration | `prisma/migrations/…_add_<model>/`. Add a model's file, then migrate, before adding the next, so each model gets its own migration |
+| Seeder | `prisma/seeds/<table>.ts`, exporting `seedX(prisma)`. [prisma/seed.ts](prisma/seed.ts) only runs them in order |
+| Queries | `src/models/<model>.ts`. Pages and actions call these rather than `prisma.<model>` directly (blog and contact predate this and still query inline) |
+
+**Models:**
+- `BlogPost`: slug-addressed, with a `published` flag gating every query.
+- `ContactSubmission`.
+- `AdminUser`: created only by `npm run admin:create`.
+- `Skill`: `row` 1 or 2 is the marquee row, ordered by `sortOrder`.
+- `Experience`: `startDate`, and `endDate` where null means Present. Both are stored as the first of the month in UTC. Also an optional `periodLabel` that replaces the date text, `countsTowardExperience` (default true; Early Career is false), and `metrics` / `projects` JSON columns.
+- The Skill and Experience seeders only fill an empty table, so a reseed never overwrites admin edits.
+
+**Years of experience is computed, never typed.** `calculateYearsOfExperience` in [src/lib/experience.ts](src/lib/experience.ts) builds one span per entry, from the start month through the end of the end month (or now). It merges overlapping or touching spans, sums them in calendar months, and floors to whole years. **Career breaks are not counted**, and neither are entries with `countsTowardExperience = false`. Those still show on the timeline.
+- `getTimeline()` ([src/models/experience.ts](src/models/experience.ts), React `cache`) returns the timeline entries and `yearsOfExperience`.
+- [page.tsx](src/app/page.tsx) passes that number to Hero, Ticker, Stats, Timeline and ForYou, and into `generateMetadata`. Never hard-code a years figure in copy.
+- The home page is statically rendered with `revalidate = 86400`, so the figure ticks over daily.
+- `src/lib/experience.ts` is Prisma-free, so client components can import its types (`TimelineEntry`, `ExperienceMetric`, …).
 
 **Server/client split.** Nearly every page is a server component that queries Prisma directly ([src/app/page.tsx](src/app/page.tsx), [src/app/blog/[slug]/page.tsx](src/app/blog/[slug]/page.tsx)). The API routes under `src/app/api/` exist for external/client consumption and duplicate those queries — changing what "published" means, or the post select shape, means touching both. Interactive chrome (Nav + CommandPalette) is isolated in [src/components/HomeClient.tsx](src/components/HomeClient.tsx) so the home page itself can stay a server component; follow that pattern rather than making a page a client component.
 
 **Home page is one long scroll** of section components from `src/components/sections/`, each rendering an `id` anchor (`hero`, `timeline`, `what`, `skills`, `projects`, `blog`, `for-you`, `contact`). Those ids are the contract for `useActiveSection`, the nav links, and the ⌘K command palette — all defined in [src/data/nav.ts](src/data/nav.ts). Add a section → add its id in all three places.
 
-**Content lives in `src/data/`** as typed TypeScript arrays (projects, skills, timeline, whatIDo), each exporting its own interface. Blog posts are the exception: they come from the database.
+**Static content lives in `src/data/`** as typed TypeScript arrays (projects, whatIDo, nav), each exporting its own interface. **Skills, experience and blog posts come from the database.** The server page fetches them and passes plain serializable props to the section components; no `Date` crosses into a client component.
 
 **Contact flow**: [Contact.tsx](src/components/sections/Contact.tsx) POSTs to [/api/contact](src/app/api/contact/route.ts) → `contactSchema` (Zod, in [src/lib/validations.ts](src/lib/validations.ts)) → DB row → Resend email built by `buildContactEmailHtml`. The `type` field (`"hiring" | "junior"`) drives the site's two audience tracks and is enumerated in the schema, the Zod validator, and the email template.
 

@@ -1,21 +1,22 @@
 "use client";
-import { timeline, timelineYears } from "@/data/timeline";
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
+import type { TimelineEntry } from "@/lib/experience";
 
-export function Timeline() {
+// Entries come from the Experience table, newest first (see getTimeline).
+export function Timeline({ entries, yearsOfExperience }: { entries: TimelineEntry[]; yearsOfExperience: number }) {
   return (
     <section id="timeline" className="py-[110px] px-[5%] bg-white">
       <ScrollReveal>
         <p className="text-[0.65rem] font-bold tracking-[3px] uppercase text-muted mb-2">Career</p>
-        <h2 className="text-[clamp(2rem,3.5vw,2.75rem)] font-black tracking-[-1.5px] leading-[1.1] text-black">A story built over 11+ years.</h2>
+        <h2 className="text-[clamp(2rem,3.5vw,2.75rem)] font-black tracking-[-1.5px] leading-[1.1] text-black">A story built over {yearsOfExperience}+ years.</h2>
       </ScrollReveal>
 
       <div className="grid md2:grid-cols-[200px_1fr] gap-16 mt-16 items-start">
         {/* Legend */}
         <div className="hidden md2:block sticky top-20">
           <p className="text-[0.62rem] font-bold tracking-[2.5px] uppercase text-muted mb-5">Jump to</p>
-          {timelineYears.map((year, i) => (
-            <a key={i} href="#" className="flex items-center gap-[0.65rem] px-[0.7rem] py-2 rounded-md cursor-none no-underline transition-colors hover:bg-gray mb-0.5 group">
+          {entries.map(({ id, yearRange: year }) => (
+            <a key={id} href="#" className="flex items-center gap-[0.65rem] px-[0.7rem] py-2 rounded-md cursor-none no-underline transition-colors hover:bg-gray mb-0.5 group">
               <span className="w-[6px] h-[6px] rounded-full bg-border flex-shrink-0 group-hover:bg-black transition-colors" />
               <span className="text-[0.75rem] font-semibold text-muted group-hover:text-black transition-colors">{year}</span>
             </a>
@@ -24,8 +25,8 @@ export function Timeline() {
 
         {/* Entries */}
         <div className="relative pl-7 before:content-[''] before:absolute before:left-0 before:top-2 before:bottom-5 before:w-px before:bg-border">
-          {timeline.map((entry, i) => (
-            <ScrollReveal key={i} delay={i * 0.05} className="relative mb-14 group">
+          {entries.map((entry, i) => (
+            <ScrollReveal key={entry.id} delay={i * 0.05} className="relative mb-14 group">
               <span className="absolute -left-[1.9rem] top-[7px] w-[10px] h-[10px] rounded-full bg-white border-[1.5px] border-border group-hover:border-black group-hover:bg-black transition-all" />
               <div className="flex items-start justify-between gap-4 mb-1.5 flex-wrap">
                 <div>
@@ -41,7 +42,7 @@ export function Timeline() {
 
               <p className="text-[0.875rem] text-text2 leading-[1.78] mb-5">{entry.description}</p>
 
-              {entry.metrics && (
+              {entry.metrics.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-5">
                   {entry.metrics.map((m, mi) => (
                     <span key={mi} className={`text-[0.72rem] font-semibold px-[0.7rem] py-[0.25rem] rounded-[3px] border ${m.type === "green" ? "bg-[#F0FDF4] text-green border-[#BBF7D0]" : m.type === "amber" ? "bg-[#FFFBEB] text-amber border-[#FDE68A]" : "bg-gray text-black border-border"}`}>{m.label}</span>
@@ -49,7 +50,7 @@ export function Timeline() {
                 </div>
               )}
 
-              {entry.projects && (
+              {entry.projects.length > 0 && (
                 <div className="flex flex-wrap gap-[0.6rem]">
                   {entry.projects.map((p, pi) => (
                     <div key={pi} className="border border-border rounded-lg px-[0.85rem] py-[0.6rem] cursor-none hover:border-black hover:shadow-[2px_2px_0_#0A0A0A] transition-all bg-white">

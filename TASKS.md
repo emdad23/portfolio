@@ -150,6 +150,7 @@ Goal: a login-protected admin at a secret URL for adding, editing and deleting s
   - A break inside one role is modelled by splitting that entry in two.
   - Worked example with today's data: May 2013 → Nov 2019 (6y 7m) plus Aug 2020 → today (6y 1.5m) = 12y 8.5m, shown as **12+**. The 8-month break is excluded.
 - **Dates on every entry:** each entry has real dates, plus an optional `periodLabel` that replaces the date text (e.g. "Early Career").
+- **Excluded entries:** `countsTowardExperience` (default true) keeps an entry on the timeline but out of the years sum. **Early Career is excluded** (user decision, 2026-09-14), so its placeholder dates only affect where it sits on the timeline. The site shows **12+**.
 
 ---
 
@@ -255,7 +256,10 @@ One file for every table's schema, migration and seed didn't scale, so each conc
   - Otherwise, rewrite to `/admin*` and set `X-Robots-Tag: noindex, nofollow`.
 - [ ] Admin layouts export `robots: { index: false, follow: false }`. The path never appears in the nav, sitemap or robots.txt.
 
-**8.4 Verify**
+**8.4 Docs**
+- [ ] [CLAUDE.md](CLAUDE.md) § Environment / Architecture: `AUTH_SECRET`, `ADMIN_PATH` (it must be set at build time too), the middleware rewrite, and the rule that every admin server action calls `requireAdmin()`. This was moved here from 11.4.
+
+**8.5 Verify**
 - [ ] `/admin` and `/admin/login` return 404.
 - [ ] A logged-out `/<ADMIN_PATH>/anything` redirects to login.
 - [ ] A wrong password shows the generic error, and the 6th attempt is throttled.
@@ -302,6 +306,7 @@ One file for every table's schema, migration and seed didn't scale, so each conc
   - `role`, `company` and `description` are required, and `companyLink` must be a URL if given.
   - Start is a `YYYY-MM` month; end is a month or Present, and must not be before the start.
   - `periodLabel` is optional.
+  - `countsTowardExperience` is a boolean, default true.
   - `metrics[]` entries: `{ label, type: default|green|amber }`.
   - `projects[]` entries: `{ name, icon, tags[] }`.
 - [ ] `actions/experience.ts`: `createExperience`, `updateExperience` and `deleteExperience`. Each runs `requireAdmin()`, then Zod, then Prisma, then revalidates `/` and the admin path.
@@ -313,6 +318,7 @@ One file for every table's schema, migration and seed didn't scale, so each conc
 - [ ] `(panel)/experience/new/page.tsx` and `(panel)/experience/[id]/page.tsx` share an `ExperienceForm` client component:
   - `type="month"` start and end inputs, and a Present checkbox that disables the end input.
   - An optional period label.
+  - A "Count toward years of experience" checkbox, checked by default.
   - Repeatable metric rows (label + type select) with add/remove.
   - Repeatable project rows (name, icon, comma-separated tags) with add/remove.
   - The form stacks to one column on phones.
@@ -329,40 +335,85 @@ One file for every table's schema, migration and seed didn't scale, so each conc
 
 ## 11. Public site reads skills & experience from DB, computed years
 
-**Status:** not started · **Depends on:** 7 (can land before 9/10)
+**Status:** done (2026-09-14). Two checks are deferred: the extra widths and zoom (see 11.4), and revalidation in production, which moves to tasks 9/10.
 
-**11.1 Pure helpers**: `src/lib/experience.ts`
-- [ ] `formatPeriod(e)` returns `periodLabel`, or `"Nov 2022 — Present"` when no label is set.
-- [ ] `formatYearRange(e)` returns `"2022 — Present"`, for the "Jump to" list.
-- [ ] `calculateYearsOfExperience(entries, now = new Date())`:
-  - Build intervals from the 1st of the start month to the end of the end month (or `now`).
-  - Sort them, then merge any that overlap or touch.
-  - Sum the merged durations and return floored years.
-- [ ] Check it with `npx tsx -e`:
-  - The worked example returns 12.
-  - Touching promotion months count once.
-  - A single Present entry.
-  - A 2-year break is excluded.
+**Follow-up (2026-09-14): exclude Early Career from the sum.** The user asked for it, so the figures below that say 15+ are now **12+**.
+- [x] `countsTowardExperience Boolean @default(true)` on `Experience`, in its own migration `20260914174600_experience_counts_toward_experience`.
+- [x] `calculateYearsOfExperience` drops entries with `countsTowardExperience === false` before merging.
+- [x] `ExperienceInput` gains the field. The Early Career seeder sets it to `false`, and the existing local row was updated directly, because the seeder skips a non-empty table.
+- [x] Tests are now 13 of 13, adding: Early Career flagged false gives 12, the flag set to true behaves like unset (6), and only excluded entries gives 0. `tsc` is clean.
+- [x] A fresh Prisma client over the live DB computes **12**.
+- [x] **The dev server kept rendering 15+.**
+  - Cause: [src/lib/prisma.ts](src/lib/prisma.ts) cached the client on `globalThis` across hot reloads. The instance built before `prisma generate` (dev had been up since before the migration) never selected the new column, so `countsTowardExperience` was `undefined` and treated as counted.
+  - Fix: the cache is reused only while `cached instanceof PrismaClient`. A regenerate plus hot reload loads a new class, so the stale client is disconnected and replaced. No restart is needed after schema changes.
+  - Verified without restarting dev: `/` shows **12+** in the hero, bento, ticker, stats, Timeline heading, both ForYou mentions, and the meta/OG descriptions. `/blog` returns 200 and `tsc` is clean.
+  - Documented in CLAUDE.md § Architecture.
 
-**11.2 Queries**: the model modules from 7.6 (`src/models/skill.ts`, `src/models/experience.ts`), not a separate `content.ts`
-- [ ] Page-facing getters built on the model modules (`getSkillMarqueeRows()`, `listExperiences()`, plus a years helper), wrapped in React `cache()`.
-  - Return plain serializable view models, so no `Date` reaches client props.
-  - Skill rows come back as `string[]` (`"⚡ PHP"`).
-  - Experience comes back in the existing `TimelineEntry` shape with a preformatted `period`, plus a `years: string[]` list.
+**11.1 Pure helpers**: [src/lib/experience.ts](src/lib/experience.ts) (Prisma-free, so client components can import its types)
+- [x] `formatPeriod(e)` returns `periodLabel`, or `"Nov 2022 — Present"` when no label is set. It formats in UTC, because dates are stored as the 1st of the month at 00:00 UTC.
+- [x] `formatYearRange(e)` returns `"2022 — Present"`, a single year when an entry starts and ends in the same year, or the label if set.
+- [x] `calculateYearsOfExperience(entries, now = new Date())`:
+  - Each entry spans its start month through the end of its end month (or `now`). Future spans are dropped.
+  - Spans are sorted and merged where they overlap or touch.
+  - The merged spans are summed and floored to whole years.
+  - **Bug caught by the tests:** the first version divided milliseconds by 365.2425 days, so exactly 5 calendar years (1826 days) floored to 4. It now sums calendar months, with only the final partial month as a fraction.
+- [x] Tested with a tsx script, 10 of 10 passing at `now` = 14 Sep 2026:
+
+  | Case | Result |
+  | --- | --- |
+  | Worked example without Early Career | 12 |
+  | Worked example with the Early Career placeholder | 15 |
+  | Touching months (Jan–Jun + Jun–Nov) | 0: 11 months, not 12 |
+  | Identical overlapping entries (2015–2019 twice) | 5 |
+  | A single Present entry from Sep 2020 | 6 |
+  | 2y + 2y with a 2-year break | 4: counting from the earliest start would give 6 |
+  | Exactly Jan–Dec | 1 |
+  | Jan–Nov | 0 |
+  | No entries | 0 |
+  | Future start | 0 |
+
+  `formatPeriod` and `formatYearRange` outputs were checked too.
+
+**11.2 Queries**: the model modules from 7.6, not a separate `content.ts`
+- [x] `getTimeline()` in [src/models/experience.ts](src/models/experience.ts), wrapped in React `cache()` and shared by the page and `generateMetadata`.
+  - Returns `{ entries: TimelineEntry[], yearsOfExperience }`.
+  - Entries are plain strings (`period`, `yearRange`) plus the metric and project arrays, so no `Date` reaches client props.
+  - The planned separate `years: string[]` list became a `yearRange` field on each entry instead.
+- [x] `getSkillMarqueeRows()` in [src/models/skill.ts](src/models/skill.ts) is now `cache()`d and returns `{ 1: string[], 2: string[] }` (`"⚡ PHP"`).
+- [x] The metric and project types moved out of the model into `src/lib/experience.ts`.
 
 **11.3 Wire up the sections**
-- [ ] [page.tsx](src/app/page.tsx): add the new queries to the `Promise.all` next to `getRecentPosts`.
-- [ ] `Skills` takes `row1` / `row2` props; `MarqueeRow` is unchanged.
-- [ ] `Timeline` takes `entries`, `years` and `yearsOfExperience` props.
-- [ ] `Hero` (the text and the bento tile), `Stats`, `Ticker` and `ForYou` (both mentions) take `yearsOfExperience`, so no hard-coded `11` is left.
-- [ ] Add `generateMetadata()` in [page.tsx](src/app/page.tsx) for the years-bearing title and description, and make the [layout.tsx](src/app/layout.tsx) description generic.
-- [ ] Delete `src/data/skills.ts` and `src/data/timeline.ts`.
+- [x] [page.tsx](src/app/page.tsx) runs `Promise.all([getRecentPosts(), getSkillMarqueeRows(), getTimeline()])`.
+- [x] `Skills({ row1, row2 })`: `MarqueeRow` is unchanged, and an empty row renders nothing.
+- [x] `Timeline({ entries, yearsOfExperience })`:
+  - The heading shows the computed years.
+  - The Jump-to list uses each entry's `yearRange`, keyed by `id`.
+  - Metrics and projects render only when non-empty; empty arrays are what the DB returns now, where the old data used `undefined`.
+- [x] `Hero` (the text and the bento tile), `Stats`, `Ticker` and `ForYou` (both mentions) take `yearsOfExperience`.
+- [x] `generateMetadata()` in page.tsx sets the description and OG description with the computed years. The [layout.tsx](src/app/layout.tsx) description is generic.
+- [x] **`export const revalidate = 86400`** on the home page. It is statically rendered and the years are computed against "now", so without this the figure would freeze at build time.
+- [x] Deleted `src/data/skills.ts` and `src/data/timeline.ts`.
 
 **11.4 Docs & verify**
-- [ ] Update [CLAUDE.md](CLAUDE.md): the new models, that skills and experience now live in the DB (not `src/data/`), the admin path and auth env, and that years are computed.
-- [ ] Run `tsc --noEmit` and grep `src/` for any leftover `11+` / `11 years`.
-- [ ] An admin edit shows on `/` after a reload, with no rebuild (revalidation).
-- [ ] Check the home sections at 360 / 768 / 960 / 1440 / 2560 px, plus 1280 px at 150% zoom.
+- [x] [CLAUDE.md](CLAUDE.md) now covers:
+  - The one-file-per-model/migration/seeder/query layout, and the five models.
+  - Prisma 7's `migrate dev` no longer generating the client.
+  - Skills, experience and blog posts coming from the DB.
+  - The computed-years rules and "never hard-code a years figure".
+  - `admin:create`.
+  - The admin path and auth env are documented in task 8, since they don't exist yet.
+- [x] `tsc --noEmit` is clean, and `src/` has no leftover `11+`, `11 years`, `data/skills`, `data/timeline`, `skillsRow` or `timelineYears`.
+- [x] Rendered `/` from the dev server:
+  - 15+ appears in the hero text, the bento tile, the ticker, stats, the Timeline heading, both ForYou mentions, and the meta and OG descriptions.
+  - All 6 period badges and Jump-to ranges (including "Early Career") are there, and all 25 skills.
+- [x] **DB → page round trip:**
+  - Setting the current role's end to Aug 2025 turned every figure into 14+ and the badge into "Nov 2022 — Aug 2025". A test skill appeared in row 2.
+  - Reverting restored 15+ and "Present".
+  - In production the edit needs `revalidatePath("/")`, which the admin actions add in tasks 9/10.
+- [x] Screenshots via Chrome over DevTools at 1280×900 and 360×800: hero/bento/ticker, Timeline, Skills and ForYou all render the DB content correctly.
+- [ ] Not yet checked at 768 / 960 / 1440 / 2560 or at 1280 with 150% zoom. The change only swaps text and numbers inside existing markup (15 is the same width as 11). Re-check after the task 6 responsive pass lands.
+
+**Noticed, not part of this task:** the hero's rotating FlipWords line renders blank, and there's no nav below 960px. Both are task 6 items, already fixed in the uncommitted responsive pass.
 
 ---
 

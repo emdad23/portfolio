@@ -1,5 +1,4 @@
 "use client";
-import { skillsRow1, skillsRow2 } from "@/data/skills";
 
 function MarqueeRow({ skills, reverse }: { skills: string[]; reverse?: boolean }) {
   const doubled = [...skills, ...skills];
@@ -16,15 +15,16 @@ function MarqueeRow({ skills, reverse }: { skills: string[]; reverse?: boolean }
   );
 }
 
-export function Skills() {
+// Rows come from the Skill table (see getSkillMarqueeRows); an empty row renders nothing.
+export function Skills({ row1, row2 }: { row1: string[]; row2: string[] }) {
   return (
     <section id="skills" className="py-[70px] bg-white overflow-hidden">
       <div className="text-center px-[5%] mb-9">
         <p className="text-[0.65rem] font-bold tracking-[3px] uppercase text-muted mb-2">Stack</p>
         <h2 className="text-[1.6rem] font-black tracking-[-1px] text-black">The right tool for the right job.</h2>
       </div>
-      <MarqueeRow skills={skillsRow1} />
-      <MarqueeRow skills={skillsRow2} reverse />
+      {row1.length > 0 && <MarqueeRow skills={row1} />}
+      {row2.length > 0 && <MarqueeRow skills={row2} reverse />}
     </section>
   );
 }

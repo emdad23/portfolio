@@ -76,11 +76,12 @@ const experiences = [
   {
     role: "Software Developer",
     company: "Iterato · PinkWhale · Aareas Interactive",
-    // PLACEHOLDER dates — the original entry had none. Correct them in the admin:
-    // they count toward the years-of-experience total.
+    // Placeholder dates (the original entry had none); they only place the entry
+    // on the timeline, because it is excluded from the years-of-experience sum.
     startDate: month("2011-01"),
     endDate: month("2013-04"),
     periodLabel: "Early Career",
+    countsTowardExperience: false,
     description:
       "Multiple agencies, different domains, tight deadlines. The pressure that builds engineers who can handle anything.",
     metrics: [],

@@ -9,6 +9,8 @@ model Experience {
   endDate     DateTime?
   // Replaces the formatted date range when set, e.g. "Early Career".
   periodLabel String?
+  // False keeps the entry on the timeline but out of the years-of-experience sum.
+  countsTowardExperience Boolean @default(true)
   description String    @db.Text
   // [{ label, type?: "default" | "green" | "amber" }]
   metrics     Json      @default("[]")

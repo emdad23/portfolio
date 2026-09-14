@@ -11,10 +11,30 @@ import { BlogPreview } from "@/components/sections/BlogPreview";
 import { ForYou } from "@/components/sections/ForYou";
 import { Contact } from "@/components/sections/Contact";
 import { CommandPalette } from "@/components/layout/CommandPalette";
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
+import { getSkillMarqueeRows } from "@/models/skill";
+import { getTimeline } from "@/models/experience";
 
 // Nav + CommandPalette need client-side state — wrap in a client component
 import { HomeClient } from "@/components/HomeClient";
+
+// The page is statically rendered, and years of experience is computed against
+// "now" at render time. Re-render daily so the figure ticks over on its own;
+// admin edits revalidate "/" immediately.
+export const revalidate = 86400;
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { yearsOfExperience } = await getTimeline();
+  return {
+    description: `Principal Software Developer with ${yearsOfExperience}+ years in eCommerce, CRM, and enterprise systems. Leading teams, managing clients, and shipping products that matter.`,
+    openGraph: {
+      title: "Emdad Ullah — Principal Software Engineer",
+      description: `Principal Software Developer with ${yearsOfExperience}+ years in eCommerce, CRM, and enterprise systems.`,
+      type: "website",
+    },
+  };
+}
 
 async function getRecentPosts() {
   return prisma.blogPost.findMany({
@@ -26,20 +46,24 @@ async function getRecentPosts() {
 }
 
 export default async function HomePage() {
-  const posts = await getRecentPosts();
+  const [posts, skillRows, { entries, yearsOfExperience }] = await Promise.all([
+    getRecentPosts(),
+    getSkillMarqueeRows(),
+    getTimeline(),
+  ]);
 
   return (
     <>
       <HomeClient />
-      <Hero />
-      <Ticker />
-      <Stats />
-      <Timeline />
+      <Hero yearsOfExperience={yearsOfExperience} />
+      <Ticker yearsOfExperience={yearsOfExperience} />
+      <Stats yearsOfExperience={yearsOfExperience} />
+      <Timeline entries={entries} yearsOfExperience={yearsOfExperience} />
       <WhatIDo />
-      <Skills />
+      <Skills row1={skillRows[1]} row2={skillRows[2]} />
       <Projects />
       <BlogPreview posts={posts} />
-      <ForYou />
+      <ForYou yearsOfExperience={yearsOfExperience} />
       <Contact />
       <Footer />
     </>

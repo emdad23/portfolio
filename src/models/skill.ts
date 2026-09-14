@@ -1,4 +1,5 @@
 // Skill model: every query against the Skill table goes through here.
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 
 // The home page has two marquee rows.
@@ -22,15 +23,16 @@ export function countSkills() {
   return prisma.skill.count();
 }
 
-// Marquee labels per row, e.g. [["⚡ PHP", …], ["🐋 Kubernetes", …]].
-export async function getSkillMarqueeRows(): Promise<Record<SkillRow, string[]>> {
+// Marquee labels per row, e.g. { 1: ["⚡ PHP", …], 2: ["🐋 Kubernetes", …] }.
+// Cached per request.
+export const getSkillMarqueeRows = cache(async (): Promise<Record<SkillRow, string[]>> => {
   const rows: Record<SkillRow, string[]> = { 1: [], 2: [] };
   for (const skill of await listSkills()) {
     const row = skill.row === 2 ? 2 : 1;
     rows[row].push(skill.icon ? `${skill.icon} ${skill.name}` : skill.name);
   }
   return rows;
-}
+});
 
 export function createSkill(data: SkillInput) {
   return prisma.skill.create({ data });

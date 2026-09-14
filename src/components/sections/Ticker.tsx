@@ -1,5 +1,5 @@
-export function Ticker() {
-  const items = ["Principal Engineer","Team Leadership","Client Management","11+ Years","eCommerce at Scale","Agile Delivery","7 Projects Managed","Open to Mentoring"];
+export function Ticker({ yearsOfExperience }: { yearsOfExperience: number }) {
+  const items = ["Principal Engineer","Team Leadership","Client Management",`${yearsOfExperience}+ Years`,"eCommerce at Scale","Agile Delivery","7 Projects Managed","Open to Mentoring"];
   const row = (
     <>
       {[...items,...items].map((item, i) => (
