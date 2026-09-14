@@ -2,6 +2,10 @@
 import { ScrollReveal } from "@/components/ui/ScrollReveal";
 import type { TimelineEntry } from "@/lib/experience";
 
+// Anchor for one entry, targeted by the Jump-to list. Prefixed so it can't
+// collide with the section ids in src/data/nav.ts.
+const entryAnchor = (id: string) => `experience-${id}`;
+
 // Entries come from the Experience table, newest first (see getTimeline).
 export function Timeline({ entries, yearsOfExperience }: { entries: TimelineEntry[]; yearsOfExperience: number }) {
   return (
@@ -16,7 +20,7 @@ export function Timeline({ entries, yearsOfExperience }: { entries: TimelineEntr
         <div className="hidden md2:block sticky top-20">
           <p className="text-[0.62rem] font-bold tracking-[2.5px] uppercase text-muted mb-5">Jump to</p>
           {entries.map(({ id, yearRange: year }) => (
-            <a key={id} href="#" className="flex items-center gap-[0.65rem] px-[0.7rem] py-2 rounded-md cursor-none no-underline transition-colors hover:bg-gray mb-0.5 group">
+            <a key={id} href={`#${entryAnchor(id)}`} className="flex items-center gap-[0.65rem] px-[0.7rem] py-2 rounded-md cursor-none no-underline transition-colors hover:bg-gray mb-0.5 group">
               <span className="w-[6px] h-[6px] rounded-full bg-border flex-shrink-0 group-hover:bg-black transition-colors" />
               <span className="text-[0.75rem] font-semibold text-muted group-hover:text-black transition-colors">{year}</span>
             </a>
@@ -26,7 +30,8 @@ export function Timeline({ entries, yearsOfExperience }: { entries: TimelineEntr
         {/* Entries */}
         <div className="relative pl-7 before:content-[''] before:absolute before:left-0 before:top-2 before:bottom-5 before:w-px before:bg-border">
           {entries.map((entry, i) => (
-            <ScrollReveal key={entry.id} delay={i * 0.05} className="relative mb-14 group">
+            // scroll-mt clears the fixed 62px nav when a Jump-to link lands here.
+            <ScrollReveal key={entry.id} id={entryAnchor(entry.id)} delay={i * 0.05} className="relative mb-14 group scroll-mt-24">
               <span className="absolute -left-[1.9rem] top-[7px] w-[10px] h-[10px] rounded-full bg-white border-[1.5px] border-border group-hover:border-black group-hover:bg-black transition-all" />
               <div className="flex items-start justify-between gap-4 mb-1.5 flex-wrap">
                 <div>

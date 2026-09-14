@@ -7,11 +7,13 @@ interface Props {
   delay?: number;
   className?: string;
   y?: number;
+  id?: string;
 }
 
-export function ScrollReveal({ children, delay = 0, className, y = 22 }: Props) {
+export function ScrollReveal({ children, delay = 0, className, y = 22, id }: Props) {
   return (
     <motion.div
+      id={id}
       initial={{ opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.1 }}
