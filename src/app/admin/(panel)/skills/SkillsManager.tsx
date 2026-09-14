@@ -9,7 +9,8 @@ import {
   type SkillFormState,
 } from "@/app/admin/actions/skills";
 import { SubmitButton } from "@/components/admin/SubmitButton";
-import { errorClass, fieldClass, labelClass, secondaryButtonClass } from "@/components/admin/styles";
+import { Field, fieldProps } from "@/components/admin/Field";
+import { errorClass, fieldClass, secondaryButtonClass } from "@/components/admin/styles";
 
 export type AdminSkill = { id: string; name: string; icon: string | null; row: 1 | 2; sortOrder: number };
 
@@ -47,34 +48,6 @@ export function SkillsManager({ skills }: { skills: AdminSkill[] }) {
   );
 }
 
-// Field + label + inline error, stacked.
-function Field({
-  label,
-  id,
-  error,
-  className = "",
-  children,
-}: {
-  label: string;
-  id: string;
-  error?: string;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className={`flex flex-col gap-1 min-w-0 ${className}`}>
-      <label htmlFor={id} className={labelClass}>{label}</label>
-      {children}
-      {error && <p id={`${id}-error`} className={errorClass}>{error}</p>}
-    </div>
-  );
-}
-
-// aria props for an input whose error is rendered by <Field>.
-function invalidProps(id: string, error?: string) {
-  return { id, "aria-invalid": !!error, "aria-describedby": error ? `${id}-error` : undefined };
-}
-
 // The shared icon / name / row (/ sort order) inputs.
 function SkillFields({ idPrefix, skill, errors }: { idPrefix: string; skill?: AdminSkill; errors: SkillFormState["errors"] }) {
   const e = errors ?? {};
@@ -83,14 +56,14 @@ function SkillFields({ idPrefix, skill, errors }: { idPrefix: string; skill?: Ad
     <>
       <Field label="Icon" id={fid("icon")} error={e.icon} className="w-20">
         <input name="icon" defaultValue={skill?.icon ?? ""} placeholder="Emoji" maxLength={16} autoComplete="off"
-          {...invalidProps(fid("icon"), e.icon)} className={fieldClass(!!e.icon)} />
+          {...fieldProps(fid("icon"), e.icon)} className={fieldClass(!!e.icon)} />
       </Field>
       <Field label="Name" id={fid("name")} error={e.name} className="flex-1 basis-40">
         <input name="name" defaultValue={skill?.name ?? ""} required maxLength={60} autoComplete="off"
-          {...invalidProps(fid("name"), e.name)} className={fieldClass(!!e.name)} />
+          {...fieldProps(fid("name"), e.name)} className={fieldClass(!!e.name)} />
       </Field>
       <Field label="Row" id={fid("row")} error={e.row} className="w-28">
-        <select name="row" defaultValue={skill?.row ?? 1} {...invalidProps(fid("row"), e.row)} className={fieldClass(!!e.row)}>
+        <select name="row" defaultValue={skill?.row ?? 1} {...fieldProps(fid("row"), e.row)} className={fieldClass(!!e.row)}>
           <option value="1">Row 1</option>
           <option value="2">Row 2</option>
         </select>
@@ -98,7 +71,7 @@ function SkillFields({ idPrefix, skill, errors }: { idPrefix: string; skill?: Ad
       {skill && (
         <Field label="Sort order" id={fid("sortOrder")} error={e.sortOrder} className="w-28">
           <input name="sortOrder" type="number" inputMode="numeric" min={0} max={9999} step={1} required defaultValue={skill.sortOrder}
-            {...invalidProps(fid("sortOrder"), e.sortOrder)} className={fieldClass(!!e.sortOrder)} />
+            {...fieldProps(fid("sortOrder"), e.sortOrder)} className={fieldClass(!!e.sortOrder)} />
         </Field>
       )}
     </>

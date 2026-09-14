@@ -318,37 +318,47 @@ One file for every table's schema, migration and seed didn't scale, so each conc
 
 ## 10. Admin UI: experience manager
 
-**Status:** not started · **Depends on:** 8 (the shell comes from 9.1)
+**Status:** done (2026-09-15) · **Depends on:** 8 (the shell comes from 9.1)
 
 **10.1 Validation & actions**
-- [ ] `experienceSchema` in [validations.ts](src/lib/validations.ts):
-  - `role`, `company` and `description` are required, and `companyLink` must be a URL if given.
-  - Start is a `YYYY-MM` month; end is a month or Present, and must not be before the start.
-  - `periodLabel` is optional.
-  - `countsTowardExperience` is a boolean, default true.
-  - `metrics[]` entries: `{ label, type: default|green|amber }`.
-  - `projects[]` entries: `{ name, icon, tags[] }`.
-- [ ] `actions/experience.ts`: `createExperience`, `updateExperience` and `deleteExperience`. Each runs `requireAdmin()`, then Zod, then Prisma, then revalidates `/` and the admin path.
+- [x] `experienceSchema` in [validations.ts](src/lib/validations.ts). It parses the raw form (month strings, `"on"` checkboxes, the metrics/projects rows as JSON strings) and transforms straight into `ExperienceInput`:
+  - `role`, `company` and `description` are trimmed and required. `companyLink` is optional but must be an `http(s)` URL, so `javascript:` is rejected.
+  - Start is a `YYYY-MM` month. End is required unless Present, and must not be before the start (the same month is allowed). Present stores `endDate = null`.
+  - `periodLabel` is optional (blank → null). `countsTowardExperience` is a checkbox, ticked by default in the form.
+  - `metrics[]`: `{ label, type }`; `"default"` is stored as no `type`, matching the seeded rows. `projects[]`: `{ name, icon, tags }`, where tags arrive comma-separated and are split, trimmed and de-blanked. Both are capped at 20 rows.
+  - Errors use dotted paths (`metrics.1.label`, `projects.0.tags.2`). `fieldErrors` in [actionState.ts](src/lib/actionState.ts) now keys every issue by its full path; skills errors are unaffected.
+  - Month helpers `toMonthValue` / `fromMonthValue` added to [src/lib/experience.ts](src/lib/experience.ts).
+- [x] [actions/experience.ts](src/app/admin/actions/experience.ts): `createExperienceAction`, `updateExperienceAction` and `deleteExperienceAction`. Each runs `requireAdmin()`, then Zod, then the model, then revalidates `/` and the admin layout. Create and update redirect to the list; update on a deleted row returns a form message.
 
 **10.2 List page**
-- [ ] `(panel)/experience/page.tsx`: entries ordered by `startDate desc`, showing role, company and the formatted period, with Edit and Delete (with confirm).
+- [x] [(panel)/experience/page.tsx](src/app/admin/(panel)/experience/page.tsx): entries by `startDate desc` with role, company, period badge and a "Not counted in years" badge where it applies. The heading shows the computed total ("add up to 12+ years"). Each row ([ExperienceItem](src/app/admin/(panel)/experience/ExperienceItem.tsx)) has Edit and an inline Delete confirm (focus on Cancel, Escape closes it, focus returns to Delete).
+- [x] Experience added to the panel nav, and a "Manage experience →" link on the dashboard.
 
 **10.3 Create / edit form**
-- [ ] `(panel)/experience/new/page.tsx` and `(panel)/experience/[id]/page.tsx` share an `ExperienceForm` client component:
-  - `type="month"` start and end inputs, and a Present checkbox that disables the end input.
-  - An optional period label.
-  - A "Count toward years of experience" checkbox, checked by default.
-  - Repeatable metric rows (label + type select) with add/remove.
-  - Repeatable project rows (name, icon, comma-separated tags) with add/remove.
-  - The form stacks to one column on phones.
-- [ ] An unknown `[id]` returns `notFound()`.
+- [x] `new/page.tsx` and `[id]/page.tsx` share [ExperienceForm](src/app/admin/(panel)/experience/ExperienceForm.tsx):
+  - Fieldsets for Role, Period, Description, Metrics and Projects.
+  - `type="month"` inputs with a `pattern`/placeholder fallback for browsers without a month picker, and a Present checkbox that disables the end input.
+  - Period label and "Count toward years of experience" checkboxes, with hints explaining what each does.
+  - Repeatable metric rows (label + style) and project cards (name, icon, comma-separated tags). Adding a row focuses its first input; removing one focuses the add button.
+  - Row errors are hidden once rows are added or removed, because their indices go stale.
+  - After a failed save, focus goes to the first invalid field and a summary line reports the count.
+  - One column on phones, two at `md`/`sm`.
+- [x] An unknown `[id]` returns `notFound()` (404).
+- [x] Shared [Field / fieldProps / Checkbox](src/components/admin/Field.tsx) (label, hint and error wired through `aria-describedby`, 44px checkbox targets). `SkillsManager` now uses them too.
 
-**10.4 Verify**
-- [ ] Create, edit and delete round-trips work, including the metrics and projects arrays.
-- [ ] An end date before the start date is rejected with an inline error.
-- [ ] Toggling Present persists `endDate = null`.
-- [ ] Calling an action without the cookie doesn't mutate.
-- [ ] Check at 360 / 768 / 1440 px.
+**10.4 Verify**: headless Chrome over DevTools against `npm run dev`, as a throwaway `task10-test@example.com` admin (deleted afterwards). `tsc --noEmit` is clean. The schema was also run directly through 12 edge cases.
+- [x] List: 6 entries, "12+ years", and only Early Career carries "Not counted in years". Nav and dashboard link to it.
+- [x] An empty submit shows inline errors on role, company, start, end and description, focuses Role, and shows the summary.
+- [x] End before start gives the inline "The end can't be before the start", focuses End, and creates nothing.
+- [x] A blank metric label shows its row error. Removing that row clears it.
+- [x] Create persists every field: link, `2024-01`→`2024-06`, the green metric, and the project with tags `Alpha, Beta ,, Gamma` → `["Alpha","Beta","Gamma"]`. It redirects to the list, and `/` shows the role, period, metric and tags.
+- [x] The edit form is prefilled (months, link, metric and style, joined tags, checkbox). Ticking Present persists `endDate = null`, and the list shows "Jan 2024 — Present".
+- [x] Moving the entry to 2000-01 → 2005-12 (non-overlapping) lifts the admin and site figures to **18+**. Unticking "Count toward years" drops both back to **12+** and adds the badge.
+- [x] Unknown id → 404. Delete: Escape cancels; confirming removes the entry from the DB, the list and `/`.
+- [x] The browser's captured delete request replayed against another entry: without a cookie it returned 303 → login and the row survived; with the session cookie it was deleted (positive control).
+- [x] 360 / 768 / 1440 px (list and the fully populated Principal entry form), plus 1280 px at a 200% root font: no horizontal overflow and no page errors.
+  - **Fixed along the way:** at 360 px, a long admin email pushed the account block onto its own header line (three lines). The account block is now `flex-1 basis-0`, so the email truncates and the header stays at two lines.
+- [ ] As with task 9, `revalidatePath` against a production build is still unchecked.
 
 ---
 

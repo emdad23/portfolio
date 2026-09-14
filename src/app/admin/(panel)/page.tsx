@@ -14,7 +14,7 @@ export default async function AdminDashboardPage() {
   const stats = [
     { label: "Years of experience", value: `${yearsOfExperience}+`, note: "Computed from experience dates, breaks excluded" },
     { label: "Skills", value: skillCount, note: "Across both marquee rows", href: adminHref("/skills"), cta: "Manage skills →" },
-    { label: "Experience entries", value: experienceCount, note: "On the career timeline" },
+    { label: "Experience entries", value: experienceCount, note: "On the career timeline", href: adminHref("/experience"), cta: "Manage experience →" },
   ];
 
   return (

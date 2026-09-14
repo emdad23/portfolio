@@ -39,6 +39,16 @@ export interface TimelineEntry {
   projects: ExperienceProject[];
 }
 
+// <input type="month"> values ("2022-11") ↔ the first of that month, 00:00 UTC.
+export function toMonthValue(date: Date): string {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+export function fromMonthValue(value: string): Date {
+  const [year, month] = value.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, 1));
+}
+
 // Dates are stored as the first of the month at 00:00 UTC, so always format in UTC.
 const monthYear = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 
