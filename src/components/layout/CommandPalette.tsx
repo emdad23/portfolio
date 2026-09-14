@@ -59,6 +59,7 @@ export function CommandPalette({ isOpen, onClose }: Props) {
       {isOpen && (
         <motion.div
           className="fixed inset-0 z-[9000] flex items-start justify-center pt-[18vh]"
+          data-cursor-surface="scrim"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

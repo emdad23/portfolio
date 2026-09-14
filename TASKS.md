@@ -87,15 +87,33 @@ Working task list. Each task records the root cause found in the code, the plann
 
 ## 5. Custom cursor is invisible on dark sections
 
-**Status:** not started
+**Status:** done (2026-09-14)
 
 **Root cause.** [CustomCursor.tsx:58](src/components/layout/CustomCursor.tsx#L58) paints the dot `#0A0A0A` with a `rgba(10,10,10,0.25)` ring — the same black as the dark surfaces. So the cursor disappears over every dark block: the **"For Companies & Teams"** card in [ForYou.tsx:14](src/components/sections/ForYou.tsx#L14), the hero "Currently Available" bento tile, the ticker strip, hovered contact rows, and the footer. The hover state also flips to blue `#2563EB`, the same off-theme blue as task 3.
 
 **Plan.**
-- [ ] Make the cursor contrast-aware rather than fixed-colour: render it white and use `mix-blend-mode: difference`, so it inverts against whatever is behind it and is guaranteed visible on both white and black. Verify it survives the stacking contexts created by the fixed nav, the `backdrop-blur`, the particle canvas, and the ⌘K overlay — fall back to a `data-cursor-dark` / dark-surface detection approach if blending isolates anywhere.
-- [ ] Drop the blue hover colour as part of the same change (task 3 consistency).
-- [ ] Re-check the black ForYou card specifically, including its white `Let's Discuss a Role →` button, at the hover-grown ring size.
-- [ ] Confirm the cursor is still fully suppressed below 960px, where `body { cursor: auto }` takes over ([globals.css:20](src/app/globals.css#L20)).
+- [x] Make the cursor contrast-aware rather than fixed-colour: the dot is `bg-white mix-blend-difference`, and the ring is a white border (40% at rest, 70% on hover) with the same blend. Blending works because both elements are direct children of `<body>`, so they blend against the root stacking context. The nav's `backdrop-blur`, the particle canvas, `MagneticButton` transforms and the ⌘K overlay are all painted *beneath* them in that context, so none of them isolate. That constraint is noted in the component.
+- [x] **Blind spot found: mid-gray.** Difference against 50% gray leaves it at 50% gray (127 → 128), and the ⌘K scrim (`rgba(0,0,0,0.5)` over white) is exactly that, so the cursor vanished there. The scrim now carries `data-cursor-surface="scrim"`. While the pointer is on that element itself (not the panel stacked on it), the cursor drops the blend and renders plain white with a 70% ring. Scrims are always ≤50% luminance, so white is always visible. Other pages can reuse the attribute for any future overlay.
+- [x] Drop the blue hover colour as part of the same change (task 3 consistency). No `#2563EB` / `rgba(37,99,235,…)` is left in `src/` outside the Tailwind `accent` token.
+- [x] Re-check the black ForYou card specifically, including its white `Let's Discuss a Role →` button, at the hover-grown ring size. With the pointer just inside the button's left edge, the 48px ring straddles both: it reads light over the card and dark over the button.
+- [x] Confirm the cursor is still fully suppressed below 960px, where `body { cursor: auto }` takes over ([globals.css:20](src/app/globals.css#L20)).
+- [x] Also: the cursor stays at `opacity: 0` until the first `mousemove` (it used to park a dot at the top-left corner on load), and hides again when the pointer leaves the window.
+- [x] **Tested** in headless Chrome at 1280px against the dev server. Each surface was screenshotted with the cursor shown and with it hidden, comparing luminance at the dot centre and on the ring stroke (0–255):
+
+  | Surface | Dot | Ring |
+  | --- | --- | --- |
+  | Hero white background | 255 → 0 | 255 → 154 |
+  | Hero "Currently Available" tile, ticker, ForYou card, footer | 10 → 245 | 10 → 103 |
+  | Hovered contact row (black) | 10 → 245 | 10 → 174 |
+  | ForYou white button, hover ring straddling the card | 244 → 11 (button) | 10 → 174 (card side) |
+  | Nav (`backdrop-blur`) over a link | 181 → 74 | 255 → 77 |
+  | ⌘K scrim, before the fix | 127 → 128 ✗ | 127 → 127 ✗ |
+  | ⌘K scrim, after | 127 → 255 | 127 → 216 |
+  | ⌘K white panel | 255 → 0 | 255 → 154 |
+
+  At 959px and 390px both cursor elements are `display: none` and `body` is `cursor: auto`. At 960px they are `block` and `cursor: none`. No page errors. Type-checked with `tsc --noEmit` (dev was running).
+
+  Known limit: when the pointer sits on the panel's edge, the part of the ring that hangs over the scrim is still blended and faint there. The dot, which is on the panel, stays fully visible.
 
 ---
 
