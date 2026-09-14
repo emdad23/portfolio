@@ -1,0 +1,12 @@
+model Skill {
+  id        String   @id @default(cuid())
+  name      String
+  icon      String?
+  // Marquee row on the home page: 1 or 2.
+  row       Int      @default(1)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([row, sortOrder])
+}

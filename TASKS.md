@@ -137,6 +137,240 @@ Audit and fix against the rules in [CLAUDE.md § Responsive & scaling](CLAUDE.md
 
 ---
 
+## Admin panel (tasks 7–11): shared context
+
+Skills ([src/data/skills.ts](src/data/skills.ts)) and the career timeline ([src/data/timeline.ts](src/data/timeline.ts)) are hard-coded, so every change needs a code edit and a deploy. "11+ years" is typed by hand in 7 places: Hero ×2, [Stats.tsx:5](src/components/sections/Stats.tsx#L5), [Ticker.tsx:2](src/components/sections/Ticker.tsx#L2), ForYou ×2, the Timeline heading, and the [layout.tsx](src/app/layout.tsx) metadata. It is already stale.
+
+Goal: a login-protected admin at a secret URL for adding, editing and deleting skills and experience. The public site reads both from Postgres, and years of experience is calculated from the dates.
+
+**Decisions** (apply to all five tasks):
+- **Auth:** an `AdminUser` table with a bcrypt hash, created by a CLI script. The session is a signed httpOnly JWT cookie (jose).
+- **Hidden URL:** a secret prefix from `ADMIN_PATH`. Middleware rewrites it to the internal `/admin` routes, and `/admin` itself returns 404. If `ADMIN_PATH` is unset, the admin is fully disabled.
+- **Years:** each entry runs from its start month through its end month, and the end month counts in full. A Present entry runs to today. Overlapping or touching ranges are merged, then summed. **Career breaks (gaps with no entry) are not counted.** Shown as `floor(years)` + "+".
+  - A break inside one role is modelled by splitting that entry in two.
+  - Worked example with today's data: May 2013 → Nov 2019 (6y 7m) plus Aug 2020 → today (6y 1.5m) = 12y 8.5m, shown as **12+**. The 8-month break is excluded.
+- **Dates on every entry:** each entry has real dates, plus an optional `periodLabel` that replaces the date text (e.g. "Early Career").
+
+---
+
+## 7. Admin data layer: schema, migration, seed, admin script
+
+**Status:** done (2026-09-14)
+
+**7.1 Dependencies & env**
+- [x] `npm i jose bcryptjs` (jose 6.2, bcryptjs 3.0). Both ship their own types, so no `@types/bcryptjs`.
+- [x] Add a `# ─── Admin` block to [.env.example](.env.example):
+  - `AUTH_SECRET`: at least 32 chars, e.g. `openssl rand -base64 32`.
+  - `ADMIN_PATH`: a secret segment. If unset, the admin is disabled. It must be set at build time too, because middleware reads it.
+
+**7.2 Schema + migration**
+- [x] `AdminUser`: `email @unique`, `passwordHash`, timestamps.
+- [x] `Skill`: `name`, `icon?`, `row` (1 or 2), `sortOrder`, timestamps, `@@index([row, sortOrder])`.
+- [x] `Experience`: `role`, `company`, `companyLink?`, `startDate`, `endDate?` (null means Present), `periodLabel?`, `description @db.Text`, `metrics Json @default("[]")`, `projects Json @default("[]")`, timestamps, `@@index([startDate])`. Dates are stored as the 1st of the month (UTC), and the whole end month counts.
+- [x] Migrations applied host-side with `npx prisma migrate dev` against Postgres on 5433, because there's no Docker on this machine. They were first combined into one, then split one per model in 7.6. **Prisma 7's `migrate dev` no longer runs `generate`**, so `npx prisma generate` has to follow it.
+
+**7.3 Seed the existing content**
+- [x] Skills: split `"⚡ PHP"` into icon and name, keeping the row and the order (13 in row 1, 12 in row 2).
+- [x] Timeline: each period string became literal dates via a `month("2022-11")` helper.
+- [x] Early Career gets placeholder dates, Jan 2011 → Apr 2013, with `periodLabel: "Early Career"` and a comment in the seed. **Emdad must correct these in the admin**, because they change the total.
+- [x] Seed each table only when it is empty, so a reseed never overwrites admin edits. Blog posts keep their existing upsert.
+
+**7.4 Admin user script**
+- [x] [scripts/create-admin.ts](scripts/create-admin.ts) + `npm run admin:create -- you@example.com`. It upserts an `AdminUser` with a bcrypt hash (12 rounds), which doubles as a password reset.
+  - The password is prompted twice with input hidden, so it stays out of shell history, or read from `ADMIN_PASSWORD` when scripted.
+  - The email is lower-cased, and passwords must be at least 10 characters.
+  - It builds its own PrismaClient the way [seed.ts](prisma/seed.ts) does.
+
+**7.5 Verify**
+- [x] Seeded directly with `npm run db:seed` rather than `./portfolio fresh`: the new tables were empty, and a reset would have wiped the dev DB's contact submissions. Result: 25 skills and 6 experience entries, dates and metrics as expected. A second run prints "not empty, skipped" for both tables.
+- [x] `admin:create`:
+  - A short password and an invalid email are both rejected.
+  - The first run creates the user and the second resets the password.
+  - The row holds a `$2b$12$` hash that matches the new password and not the old one.
+  - The throwaway user was then deleted, so **no admin exists yet**.
+- [x] `tsc --noEmit` is clean, and the dev server is still 200 after the client regeneration.
+
+**Also fixed while in here:** `npm run db:seed` was broken on the Windows host. It ran `node node_modules/.bin/tsx`, which is a shell shim there, not JS. It is now `tsx --env-file=.env prisma/seed.ts`, the same form as `admin:create`.
+
+**7.6 Restructure: one file per model, migration and seeder**
+
+One file for every table's schema, migration and seed didn't scale, so each concern gets one file per model (the Laravel layout):
+
+| Concern | Location |
+| --- | --- |
+| Table definition | `prisma/schema/<model>.prisma`, with generator + datasource in `schema.prisma`. `prisma.config.ts` points `schema` at the folder |
+| Migration | `prisma/migrations/…_add_<model>/`, one per model |
+| Seeder | `prisma/seeds/<table>.ts`, each exporting `seedX(prisma)`. `prisma/seed.ts` only runs them in order |
+| Model module (queries) | `src/models/<model>.ts`. Pages, actions and the dashboard call these, never `prisma.<model>` directly |
+
+- [x] Removed the combined migration `20260914133804_add_admin_skills_experience`.
+- [x] `git mv` the schema into `prisma/schema/schema.prisma` (the generator `output` becomes `../../src/generated/prisma`). Split out `blog-post.prisma` and `contact-submission.prisma`.
+- [x] Seeders: `seeds/blog-posts.ts`, `seeds/skills.ts`, `seeds/experiences.ts`. A seed error now exits non-zero instead of printing and exiting 0.
+- [x] Model modules:
+  - `src/models/admin-user.ts`: `findAdminByEmail`, `findAdminById`.
+  - `src/models/skill.ts`: list/count/create/update/delete, plus `getSkillMarqueeRows()`.
+  - `src/models/experience.ts`: list/find/count/create/update/delete, typed `metrics`/`projects` JSON, and `ExperienceInput`.
+  - `tsc` is clean. The JSON shapes are `type` aliases, not `interface`s, because Prisma's `InputJsonValue` needs the implicit index signature.
+- [x] `npx prisma migrate reset --force` dropped the local `portfolio_dev` DB back to `init`, with the user's explicit consent. Prisma 7 refuses this command from an AI agent unless `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` carries the user's consent message.
+- [x] Added one model at a time, each followed by `migrate dev`:
+  - `admin-user.prisma` → `20260914135711_add_admin_user`
+  - `skill.prisma` → `20260914135733_add_skill`
+  - `experience.prisma` → `20260914135817_add_experience`
+
+  Then `prisma generate`.
+- [x] Verified:
+  - `migrate status` reports 4 migrations and "up to date", and `migrate diff` against the schema folder exits 0 (no drift).
+  - `npm run db:seed` gives 6 posts, 25 skills and 6 experiences, and a second run skips both content tables.
+  - `tsc` is clean, and the dev server returns 200.
+  - Prisma rewrote `migration_lock.toml` with LF line endings only; that change was reverted.
+
+---
+
+## 8. Admin auth & hidden URL
+
+**Status:** not started · **Depends on:** 7
+
+**8.1 Session helpers**
+- [ ] `src/lib/auth/session.ts` (Edge-safe, no Prisma import): `signSession(adminId)` and `verifySession(token)` using jose HS256 with a 7-day expiry.
+  - Cookie `admin_session`: httpOnly, `sameSite: lax`, `secure` in production, `path: /`.
+- [ ] `src/lib/auth/admin.ts` (server only):
+  - `adminHref(path)`.
+  - `requireAdmin()`: verifies the cookie and checks the admin still exists, redirecting to login otherwise. **Every server action calls it**, so security never rests on middleware alone.
+
+**8.2 Login / logout**
+- [ ] `loginSchema` in [validations.ts](src/lib/validations.ts).
+- [ ] `actions/auth.ts`, the login action:
+  - In-memory rate limit of 5 failures per IP per 15 min.
+  - A dummy bcrypt compare when the email is unknown, so timing gives nothing away.
+  - One generic error message.
+  - On success, set the cookie and redirect to the dashboard.
+- [ ] `logoutAction` clears the cookie and redirects to login.
+- [ ] `src/app/admin/login/page.tsx` + a `LoginForm` client component using `useFormState`. It follows the house style: inputs `text-base` below `md2`, 44px targets, `cursor-none`, focus rings.
+
+**8.3 Middleware**
+- [ ] `src/middleware.ts`, with a matcher that excludes `_next`, static files and `api`:
+  - `/admin*` renders the normal 404.
+  - `/${ADMIN_PATH}*` with no valid session redirects to `/${ADMIN_PATH}/login`.
+  - `/${ADMIN_PATH}/login` with a valid session redirects to the dashboard.
+  - Otherwise, rewrite to `/admin*` and set `X-Robots-Tag: noindex, nofollow`.
+- [ ] Admin layouts export `robots: { index: false, follow: false }`. The path never appears in the nav, sitemap or robots.txt.
+
+**8.4 Verify**
+- [ ] `/admin` and `/admin/login` return 404.
+- [ ] A logged-out `/<ADMIN_PATH>/anything` redirects to login.
+- [ ] A wrong password shows the generic error, and the 6th attempt is throttled.
+- [ ] A good login lands on the dashboard, and logout works.
+- [ ] A tampered or expired cookie redirects to login.
+- [ ] The response carries the `X-Robots-Tag` header.
+- [ ] With `ADMIN_PATH` unset, everything returns 404.
+
+---
+
+## 9. Admin UI: shell, dashboard, skills manager
+
+**Status:** not started · **Depends on:** 8
+
+**9.1 Panel shell**
+- [ ] `src/app/admin/(panel)/layout.tsx`: calls `requireAdmin()` and renders nav links for Dashboard / Skills / Experience / Log out.
+  - Hrefs are built server-side with `adminHref` and passed as props.
+  - The nav follows the container rules (`px-5 md2:px-[5%]`, `max-w-[1200px]`) and becomes a wrapping link row on phones.
+
+**9.2 Dashboard**
+- [ ] `(panel)/page.tsx`: the computed years (from task 11.1, a placeholder until then), skill count and experience count.
+
+**9.3 Skills manager**
+- [ ] `skillSchema` in [validations.ts](src/lib/validations.ts): `name` required, `icon` optional, `row` 1 or 2, `sortOrder` an integer.
+- [ ] `actions/skills.ts`: `createSkill`, `updateSkill` and `deleteSkill`. Each runs `requireAdmin()`, then Zod, then Prisma, then `revalidatePath("/")` and the skills admin path.
+- [ ] `(panel)/skills/page.tsx` + a `SkillsManager` client component:
+  - Skills grouped by row, with an add form (icon, name, row).
+  - Inline edit, including sort order, and delete with confirm.
+  - Validation errors show inline.
+
+**9.4 Verify**
+- [ ] Add, edit and delete round-trips persist.
+- [ ] Calling `deleteSkill` without the cookie doesn't mutate.
+- [ ] Check at 360 / 768 / 1440 px.
+
+---
+
+## 10. Admin UI: experience manager
+
+**Status:** not started · **Depends on:** 8 (the shell comes from 9.1)
+
+**10.1 Validation & actions**
+- [ ] `experienceSchema` in [validations.ts](src/lib/validations.ts):
+  - `role`, `company` and `description` are required, and `companyLink` must be a URL if given.
+  - Start is a `YYYY-MM` month; end is a month or Present, and must not be before the start.
+  - `periodLabel` is optional.
+  - `metrics[]` entries: `{ label, type: default|green|amber }`.
+  - `projects[]` entries: `{ name, icon, tags[] }`.
+- [ ] `actions/experience.ts`: `createExperience`, `updateExperience` and `deleteExperience`. Each runs `requireAdmin()`, then Zod, then Prisma, then revalidates `/` and the admin path.
+
+**10.2 List page**
+- [ ] `(panel)/experience/page.tsx`: entries ordered by `startDate desc`, showing role, company and the formatted period, with Edit and Delete (with confirm).
+
+**10.3 Create / edit form**
+- [ ] `(panel)/experience/new/page.tsx` and `(panel)/experience/[id]/page.tsx` share an `ExperienceForm` client component:
+  - `type="month"` start and end inputs, and a Present checkbox that disables the end input.
+  - An optional period label.
+  - Repeatable metric rows (label + type select) with add/remove.
+  - Repeatable project rows (name, icon, comma-separated tags) with add/remove.
+  - The form stacks to one column on phones.
+- [ ] An unknown `[id]` returns `notFound()`.
+
+**10.4 Verify**
+- [ ] Create, edit and delete round-trips work, including the metrics and projects arrays.
+- [ ] An end date before the start date is rejected with an inline error.
+- [ ] Toggling Present persists `endDate = null`.
+- [ ] Calling an action without the cookie doesn't mutate.
+- [ ] Check at 360 / 768 / 1440 px.
+
+---
+
+## 11. Public site reads skills & experience from DB, computed years
+
+**Status:** not started · **Depends on:** 7 (can land before 9/10)
+
+**11.1 Pure helpers**: `src/lib/experience.ts`
+- [ ] `formatPeriod(e)` returns `periodLabel`, or `"Nov 2022 — Present"` when no label is set.
+- [ ] `formatYearRange(e)` returns `"2022 — Present"`, for the "Jump to" list.
+- [ ] `calculateYearsOfExperience(entries, now = new Date())`:
+  - Build intervals from the 1st of the start month to the end of the end month (or `now`).
+  - Sort them, then merge any that overlap or touch.
+  - Sum the merged durations and return floored years.
+- [ ] Check it with `npx tsx -e`:
+  - The worked example returns 12.
+  - Touching promotion months count once.
+  - A single Present entry.
+  - A 2-year break is excluded.
+
+**11.2 Queries**: the model modules from 7.6 (`src/models/skill.ts`, `src/models/experience.ts`), not a separate `content.ts`
+- [ ] Page-facing getters built on the model modules (`getSkillMarqueeRows()`, `listExperiences()`, plus a years helper), wrapped in React `cache()`.
+  - Return plain serializable view models, so no `Date` reaches client props.
+  - Skill rows come back as `string[]` (`"⚡ PHP"`).
+  - Experience comes back in the existing `TimelineEntry` shape with a preformatted `period`, plus a `years: string[]` list.
+
+**11.3 Wire up the sections**
+- [ ] [page.tsx](src/app/page.tsx): add the new queries to the `Promise.all` next to `getRecentPosts`.
+- [ ] `Skills` takes `row1` / `row2` props; `MarqueeRow` is unchanged.
+- [ ] `Timeline` takes `entries`, `years` and `yearsOfExperience` props.
+- [ ] `Hero` (the text and the bento tile), `Stats`, `Ticker` and `ForYou` (both mentions) take `yearsOfExperience`, so no hard-coded `11` is left.
+- [ ] Add `generateMetadata()` in [page.tsx](src/app/page.tsx) for the years-bearing title and description, and make the [layout.tsx](src/app/layout.tsx) description generic.
+- [ ] Delete `src/data/skills.ts` and `src/data/timeline.ts`.
+
+**11.4 Docs & verify**
+- [ ] Update [CLAUDE.md](CLAUDE.md): the new models, that skills and experience now live in the DB (not `src/data/`), the admin path and auth env, and that years are computed.
+- [ ] Run `tsc --noEmit` and grep `src/` for any leftover `11+` / `11 years`.
+- [ ] An admin edit shows on `/` after a reload, with no rebuild (revalidation).
+- [ ] Check the home sections at 360 / 768 / 960 / 1440 / 2560 px, plus 1280 px at 150% zoom.
+
+---
+
 ## Suggested order
 
 Task 1 is independent (backend + env). Tasks 3 and 5 overlap on the blue/contrast question — do them together. Task 4 is self-contained. Task 2 touches the same files as 3, so land 3 first. Task 6 is last, since it will re-touch the nav, hero, and contact form that tasks 2–5 modify.
+
+Admin panel: **7 → 11 → 8 → 9 → 10**.
+- Task 11 comes right after 7, so the public site switches to the DB (with the correct years) before any UI exists.
+- Tasks 9 and 10 both need 8.
+- Task 11 touches the same section components as task 6 (Hero, Stats, Ticker, ForYou, Timeline, Skills), but only their data and props, so either order works.

@@ -10,8 +10,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:seed": "node --env-file=.env node_modules/.bin/tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:seed": "tsx --env-file=.env prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "admin:create": "tsx --env-file=.env scripts/create-admin.ts"
   },
   "prisma": {
     "seed": "npm run db:seed"
@@ -22,9 +23,11 @@
   "dependencies": {
     "@prisma/adapter-pg": "^7.5.0",
     "@prisma/client": "^7.5.0",
+    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "framer-motion": "^11.18.2",
     "gray-matter": "^4.0.3",
+    "jose": "^6.2.12",
     "next": "14.2.35",
     "nodemailer": "^10.0.9",
     "pg": "^8.20.0",

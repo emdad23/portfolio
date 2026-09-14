@@ -1,0 +1,11 @@
+// Generator and datasource only. Models live one per file in this folder;
+// prisma.config.ts points `schema` at the folder so Prisma reads them all.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

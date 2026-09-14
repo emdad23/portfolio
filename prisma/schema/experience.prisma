@@ -1,0 +1,21 @@
+model Experience {
+  id          String    @id @default(cuid())
+  role        String
+  company     String
+  companyLink String?
+  // First day of the start month.
+  startDate   DateTime
+  // First day of the end month; null means Present. The whole end month counts.
+  endDate     DateTime?
+  // Replaces the formatted date range when set, e.g. "Early Career".
+  periodLabel String?
+  description String    @db.Text
+  // [{ label, type?: "default" | "green" | "amber" }]
+  metrics     Json      @default("[]")
+  // [{ name, icon, tags: string[] }]
+  projects    Json      @default("[]")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([startDate])
+}
